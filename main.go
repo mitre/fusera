@@ -16,7 +16,6 @@
 package main
 
 import (
-	goofys "github.com/kahing/goofys/api"
 	. "github.com/kahing/goofys/internal"
 
 	"fmt"
@@ -30,7 +29,6 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/jacobsa/fuse"
-	"github.com/jinzhu/copier"
 	"github.com/kardianos/osext"
 	"github.com/urfave/cli"
 
@@ -103,18 +101,8 @@ func kill(pid int, s os.Signal) (err error) {
 
 // Mount the file system based on the supplied arguments, returning a
 // fuse.MountedFileSystem that can be joined to wait for unmounting.
-func mount(
-	ctx context.Context,
-	bucketName string,
-	flags *FlagStorage) (fs *Goofys, mfs *fuse.MountedFileSystem, err error) {
-
-	// XXX really silly copy here! in goofys.Mount we will copy it
-	// back to FlagStorage. But I don't see a easier way to expose
-	// Config in the api package
-	var config goofys.Config
-	copier.Copy(&config, *flags)
-
-	return goofys.Mount(ctx, bucketName, &config)
+func sddp_mount(ctx context.Context, flags *FlagStorage) (*Goofys, *fuse.MountedFileSystem, error) {
+	return Mount(ctx, flags)
 }
 
 func massagePath() {
@@ -151,17 +139,18 @@ func main() {
 
 	app.Action = func(c *cli.Context) (err error) {
 		// We should get two arguments exactly. Otherwise error out.
-		if len(c.Args()) != 2 {
+		if len(c.Args()) != 1 {
 			fmt.Fprintf(
 				os.Stderr,
-				"Error: %s takes exactly two arguments.\n\n",
+				"Error: %s takes exactly one argument.\n\n",
 				app.Name)
 			cli.ShowAppHelp(c)
 			os.Exit(1)
 		}
 
 		// Populate and parse flags.
-		bucketName := c.Args()[0]
+		//mountPoint := c.Args()[0]
+		fmt.Println("about to PopulateFlags")
 		flags = PopulateFlags(c)
 		if flags == nil {
 			cli.ShowAppHelp(c)
@@ -172,6 +161,16 @@ func main() {
 			time.Sleep(time.Second)
 			flags.Cleanup()
 		}()
+
+		// Evaluate mandatory flags
+		if flags.Ncg == "" {
+			return fmt.Errorf("sddp expects an ncg file")
+		}
+		if flags.Acc == nil {
+			return fmt.Errorf("sddp expects a list of accesions")
+		}
+		fmt.Println("Ncg:", flags.Ncg)
+		fmt.Println("Acc:", flags.Acc)
 
 		if !flags.Foreground {
 			var wg sync.WaitGroup
@@ -210,10 +209,7 @@ func main() {
 		// Mount the file system.
 		var mfs *fuse.MountedFileSystem
 		var fs *Goofys
-		fs, mfs, err = mount(
-			context.Background(),
-			bucketName,
-			flags)
+		fs, mfs, err = sddp_mount(context.Background(), flags)
 
 		if err != nil {
 			if !flags.Foreground {
