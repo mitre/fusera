@@ -421,9 +421,8 @@ func (fs *Goofys) getInodeOrDie(id fuseops.InodeID) (inode *Inode) {
 	return
 }
 
-func (fs *Goofys) StatFS(
-	ctx context.Context,
-	op *fuseops.StatFSOp) (err error) {
+func (fs *Goofys) StatFS(ctx context.Context, op *fuseops.StatFSOp) (err error) {
+	fmt.Println("goofys.go/StatFS called")
 
 	const BLOCK_SIZE = 4096
 	const TOTAL_SPACE = 1 * 1024 * 1024 * 1024 * 1024 * 1024 // 1PB
@@ -439,9 +438,8 @@ func (fs *Goofys) StatFS(
 	return
 }
 
-func (fs *Goofys) GetInodeAttributes(
-	ctx context.Context,
-	op *fuseops.GetInodeAttributesOp) (err error) {
+func (fs *Goofys) GetInodeAttributes(ctx context.Context, op *fuseops.GetInodeAttributesOp) (err error) {
+	fmt.Println("goofys.go/GetInodeAttributes called")
 
 	fs.mu.Lock()
 	inode := fs.getInodeOrDie(op.Inode)
@@ -456,8 +454,8 @@ func (fs *Goofys) GetInodeAttributes(
 	return
 }
 
-func (fs *Goofys) GetXattr(ctx context.Context,
-	op *fuseops.GetXattrOp) (err error) {
+func (fs *Goofys) GetXattr(ctx context.Context, op *fuseops.GetXattrOp) (err error) {
+	fmt.Println("goofys.go/GetXattr called")
 	fs.mu.Lock()
 	inode := fs.getInodeOrDie(op.Inode)
 	fs.mu.Unlock()
@@ -477,8 +475,8 @@ func (fs *Goofys) GetXattr(ctx context.Context,
 	}
 }
 
-func (fs *Goofys) ListXattr(ctx context.Context,
-	op *fuseops.ListXattrOp) (err error) {
+func (fs *Goofys) ListXattr(ctx context.Context, op *fuseops.ListXattrOp) (err error) {
+	fmt.Println("goofys.go/ListXattr called")
 	fs.mu.Lock()
 	inode := fs.getInodeOrDie(op.Inode)
 	fs.mu.Unlock()
@@ -507,8 +505,8 @@ func (fs *Goofys) ListXattr(ctx context.Context,
 	return
 }
 
-func (fs *Goofys) RemoveXattr(ctx context.Context,
-	op *fuseops.RemoveXattrOp) (err error) {
+func (fs *Goofys) RemoveXattr(ctx context.Context, op *fuseops.RemoveXattrOp) (err error) {
+	fmt.Println("goofys.go/RemoveXattr called")
 	fs.mu.Lock()
 	inode := fs.getInodeOrDie(op.Inode)
 	fs.mu.Unlock()
@@ -518,8 +516,8 @@ func (fs *Goofys) RemoveXattr(ctx context.Context,
 	return
 }
 
-func (fs *Goofys) SetXattr(ctx context.Context,
-	op *fuseops.SetXattrOp) (err error) {
+func (fs *Goofys) SetXattr(ctx context.Context, op *fuseops.SetXattrOp) (err error) {
+	fmt.Println("goofys.go/SetXattr called")
 	fs.mu.Lock()
 	inode := fs.getInodeOrDie(op.Inode)
 	fs.mu.Unlock()
@@ -589,9 +587,8 @@ func expired(cache time.Time, ttl time.Duration) bool {
 	return !cache.Add(ttl).After(time.Now())
 }
 
-func (fs *Goofys) LookUpInode(
-	ctx context.Context,
-	op *fuseops.LookUpInodeOp) (err error) {
+func (fs *Goofys) LookUpInode(ctx context.Context, op *fuseops.LookUpInodeOp) (err error) {
+	fmt.Println("goofys.go/LookUpInode called")
 
 	var inode *Inode
 	var ok bool
@@ -678,15 +675,15 @@ func (fs *Goofys) LookUpInode(
 // LOCKS_REQUIRED(fs.mu)
 // LOCKS_REQUIRED(parent.mu)
 func (fs *Goofys) insertInode(parent *Inode, inode *Inode) {
+	fmt.Println("goofys.go/insertInode called")
 	inode.Id = fs.allocateInodeId()
 	parent.insertChildUnlocked(inode)
 	fs.inodes[inode.Id] = inode
 }
 
 // LOCKS_EXCLUDED(fs.mu)
-func (fs *Goofys) ForgetInode(
-	ctx context.Context,
-	op *fuseops.ForgetInodeOp) (err error) {
+func (fs *Goofys) ForgetInode(ctx context.Context, op *fuseops.ForgetInodeOp) (err error) {
+	fmt.Println("goofys.go/ForgetInode called")
 
 	fs.mu.Lock()
 
@@ -708,9 +705,8 @@ func (fs *Goofys) ForgetInode(
 	return
 }
 
-func (fs *Goofys) OpenDir(
-	ctx context.Context,
-	op *fuseops.OpenDirOp) (err error) {
+func (fs *Goofys) OpenDir(ctx context.Context, op *fuseops.OpenDirOp) (err error) {
+	fmt.Println("goofys.go/OpenDir called")
 	fs.mu.Lock()
 
 	handleID := fs.nextHandleID
@@ -733,6 +729,7 @@ func (fs *Goofys) OpenDir(
 
 // LOCKS_EXCLUDED(fs.mu)
 func (fs *Goofys) insertInodeFromDirEntry(parent *Inode, entry *DirHandleEntry) (inode *Inode) {
+	fmt.Println("goofys.go/insertInodeFromDirEntry called")
 	parent.mu.Lock()
 	defer parent.mu.Unlock()
 
@@ -777,6 +774,7 @@ func (fs *Goofys) insertInodeFromDirEntry(parent *Inode, entry *DirHandleEntry) 
 }
 
 func makeDirEntry(en *DirHandleEntry) fuseutil.Dirent {
+	fmt.Println("goofys.go/makeDirEntry called")
 	return fuseutil.Dirent{
 		Name:   *en.Name,
 		Type:   en.Type,
@@ -786,9 +784,8 @@ func makeDirEntry(en *DirHandleEntry) fuseutil.Dirent {
 }
 
 // LOCKS_EXCLUDED(fs.mu)
-func (fs *Goofys) ReadDir(
-	ctx context.Context,
-	op *fuseops.ReadDirOp) (err error) {
+func (fs *Goofys) ReadDir(ctx context.Context, op *fuseops.ReadDirOp) (err error) {
+	fmt.Println("goofys.go/ReadDir called")
 
 	// Find the handle.
 	fs.mu.Lock()
@@ -840,9 +837,8 @@ func (fs *Goofys) ReadDir(
 	return
 }
 
-func (fs *Goofys) ReleaseDirHandle(
-	ctx context.Context,
-	op *fuseops.ReleaseDirHandleOp) (err error) {
+func (fs *Goofys) ReleaseDirHandle(ctx context.Context, op *fuseops.ReleaseDirHandleOp) (err error) {
+	fmt.Println("goofys.go/ReleaseDirHandle called")
 
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
@@ -857,9 +853,8 @@ func (fs *Goofys) ReleaseDirHandle(
 	return
 }
 
-func (fs *Goofys) OpenFile(
-	ctx context.Context,
-	op *fuseops.OpenFileOp) (err error) {
+func (fs *Goofys) OpenFile(ctx context.Context, op *fuseops.OpenFileOp) (err error) {
+	fmt.Println("goofys.go/OpenFile called")
 	fs.mu.Lock()
 	in := fs.getInodeOrDie(op.Inode)
 	fs.mu.Unlock()
@@ -883,9 +878,8 @@ func (fs *Goofys) OpenFile(
 	return
 }
 
-func (fs *Goofys) ReadFile(
-	ctx context.Context,
-	op *fuseops.ReadFileOp) (err error) {
+func (fs *Goofys) ReadFile(ctx context.Context, op *fuseops.ReadFileOp) (err error) {
+	fmt.Println("goofys.go/ReadFile called")
 
 	fs.mu.Lock()
 	fh := fs.fileHandles[op.Handle]
@@ -896,18 +890,15 @@ func (fs *Goofys) ReadFile(
 	return
 }
 
-func (fs *Goofys) SyncFile(
-	ctx context.Context,
-	op *fuseops.SyncFileOp) (err error) {
+func (fs *Goofys) SyncFile(ctx context.Context, op *fuseops.SyncFileOp) (err error) {
 
 	// intentionally ignored, so that write()/sync()/write() works
 	// see https://github.com/kahing/goofys/issues/154
 	return
 }
 
-func (fs *Goofys) FlushFile(
-	ctx context.Context,
-	op *fuseops.FlushFileOp) (err error) {
+func (fs *Goofys) FlushFile(ctx context.Context, op *fuseops.FlushFileOp) (err error) {
+	fmt.Println("goofys.go/FlushFile called")
 
 	fs.mu.Lock()
 	fh := fs.fileHandles[op.Handle]
@@ -934,9 +925,8 @@ func (fs *Goofys) FlushFile(
 	return
 }
 
-func (fs *Goofys) ReleaseFileHandle(
-	ctx context.Context,
-	op *fuseops.ReleaseFileHandleOp) (err error) {
+func (fs *Goofys) ReleaseFileHandle(ctx context.Context, op *fuseops.ReleaseFileHandleOp) (err error) {
+	fmt.Println("goofys.go/ReleaseFileHandle called")
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
 
@@ -952,9 +942,8 @@ func (fs *Goofys) ReleaseFileHandle(
 	return
 }
 
-func (fs *Goofys) CreateFile(
-	ctx context.Context,
-	op *fuseops.CreateFileOp) (err error) {
+func (fs *Goofys) CreateFile(ctx context.Context, op *fuseops.CreateFileOp) (err error) {
+	fmt.Println("goofys.go/CreateFile called")
 
 	fs.mu.Lock()
 	parent := fs.getInodeOrDie(op.Parent)
@@ -985,9 +974,8 @@ func (fs *Goofys) CreateFile(
 	return
 }
 
-func (fs *Goofys) MkDir(
-	ctx context.Context,
-	op *fuseops.MkDirOp) (err error) {
+func (fs *Goofys) MkDir(ctx context.Context, op *fuseops.MkDirOp) (err error) {
+	fmt.Println("goofys.go/MkDir called")
 
 	fs.mu.Lock()
 	parent := fs.getInodeOrDie(op.Parent)
@@ -1012,9 +1000,7 @@ func (fs *Goofys) MkDir(
 	return
 }
 
-func (fs *Goofys) RmDir(
-	ctx context.Context,
-	op *fuseops.RmDirOp) (err error) {
+func (fs *Goofys) RmDir(ctx context.Context, op *fuseops.RmDirOp) (err error) {
 
 	fs.mu.Lock()
 	parent := fs.getInodeOrDie(op.Parent)
@@ -1041,9 +1027,7 @@ func (fs *Goofys) SetInodeAttributes(
 	return
 }
 
-func (fs *Goofys) WriteFile(
-	ctx context.Context,
-	op *fuseops.WriteFileOp) (err error) {
+func (fs *Goofys) WriteFile(ctx context.Context, op *fuseops.WriteFileOp) (err error) {
 
 	fs.mu.Lock()
 
@@ -1058,9 +1042,7 @@ func (fs *Goofys) WriteFile(
 	return
 }
 
-func (fs *Goofys) Unlink(
-	ctx context.Context,
-	op *fuseops.UnlinkOp) (err error) {
+func (fs *Goofys) Unlink(ctx context.Context, op *fuseops.UnlinkOp) (err error) {
 
 	fs.mu.Lock()
 	parent := fs.getInodeOrDie(op.Parent)
@@ -1070,9 +1052,7 @@ func (fs *Goofys) Unlink(
 	return
 }
 
-func (fs *Goofys) Rename(
-	ctx context.Context,
-	op *fuseops.RenameOp) (err error) {
+func (fs *Goofys) Rename(ctx context.Context, op *fuseops.RenameOp) (err error) {
 
 	fs.mu.Lock()
 	parent := fs.getInodeOrDie(op.OldParent)
@@ -1136,6 +1116,7 @@ func (fs *Goofys) Rename(
 }
 
 func (fs *Goofys) getMimeType(fileName string) (retMime *string) {
+	fmt.Println("goofys.go/getMimeType called")
 	if fs.flags.UseContentType {
 		dotPosition := strings.LastIndex(fileName, ".")
 		if dotPosition == -1 {

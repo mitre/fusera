@@ -65,6 +65,7 @@ func NewDirHandle(inode *Inode) (dh *DirHandle) {
 }
 
 func (inode *Inode) OpenDir() (dh *DirHandle) {
+	fmt.Println("dir.go/OpenDir called")
 	inode.logFuse("OpenDir")
 
 	parent := inode.Parent
@@ -131,6 +132,7 @@ func (p sortedDirents) Less(i, j int) bool { return *p[i].Name < *p[j].Name }
 func (p sortedDirents) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
 func (dh *DirHandle) listObjectsSlurp(prefix string) (resp *s3.ListObjectsOutput, err error) {
+	fmt.Println("dir.go/listObjectsSlurp called")
 	var marker *string
 	reqPrefix := prefix
 	inode := dh.inode
@@ -213,6 +215,7 @@ func (dh *DirHandle) listObjectsSlurp(prefix string) (resp *s3.ListObjectsOutput
 }
 
 func (dh *DirHandle) listObjects(prefix string) (resp *s3.ListObjectsOutput, err error) {
+	fmt.Println("dir.go/listObjects called")
 	errSlurpChan := make(chan error, 1)
 	slurpChan := make(chan s3.ListObjectsOutput, 1)
 	errListChan := make(chan error, 1)
@@ -306,6 +309,7 @@ func objectToDirEntry(fs *Goofys, obj *s3.Object, name string, isDir bool) (en *
 
 // LOCKS_REQUIRED(dh.mu)
 func (dh *DirHandle) ReadDir(offset fuseops.DirOffset) (en *DirHandleEntry, err error) {
+	fmt.Println("dir.go/ReadDir called")
 	// If the request is for offset zero, we assume that either this is the first
 	// call or rewinddir has been called. Reset state.
 	if offset == 0 {

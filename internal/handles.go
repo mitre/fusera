@@ -67,6 +67,7 @@ type Inode struct {
 }
 
 func NewInode(fs *Goofys, parent *Inode, name *string, fullName *string) (inode *Inode) {
+	fmt.Println("handles.go/NewInode called")
 	inode = &Inode{
 		Name:       name,
 		fs:         fs,
@@ -253,6 +254,7 @@ func (parent *Inode) insertChildUnlocked(inode *Inode) {
 }
 
 func (parent *Inode) LookUp(name string) (inode *Inode, err error) {
+	fmt.Println("handles.go/LookUp called")
 	parent.logFuse("Inode.LookUp", name)
 
 	inode, err = parent.LookUpInodeMaybeDir(name, parent.getChildName(name))
@@ -325,9 +327,8 @@ func (parent *Inode) Unlink(name string) (err error) {
 	return
 }
 
-func (parent *Inode) Create(
-	name string) (inode *Inode, fh *FileHandle) {
-
+func (parent *Inode) Create(name string) (inode *Inode, fh *FileHandle) {
+	fmt.Println("handles.go/Create called")
 	parent.logFuse("Create", name)
 	fullName := parent.getChildName(name)
 	fs := parent.fs
@@ -353,9 +354,8 @@ func (parent *Inode) Create(
 	return
 }
 
-func (parent *Inode) MkDir(
-	name string) (inode *Inode, err error) {
-
+func (parent *Inode) MkDir(name string) (inode *Inode, err error) {
+	fmt.Println("handles.go/MkDir called")
 	parent.logFuse("MkDir", name)
 
 	fullName := parent.getChildName(name)
@@ -673,6 +673,7 @@ func (inode *Inode) ListXattr() ([]string, error) {
 }
 
 func (inode *Inode) OpenFile() (fh *FileHandle, err error) {
+	fmt.Println("handles.go/OpenFile called")
 	inode.logFuse("OpenFile")
 
 	inode.mu.Lock()
@@ -799,6 +800,7 @@ func mpuCopyParts(fs *Goofys, size int64, from string, to string, mpuId string,
 
 func copyObjectMultipart(fs *Goofys, size int64, from string, to string, mpuId string,
 	srcEtag *string, metadata map[string]*string) (err error) {
+	fmt.Println("handles.go/copyObjectMultipart called")
 	var wg sync.WaitGroup
 	nParts := sizeToParts(size)
 	etags := make([]*string, nParts)
@@ -867,7 +869,7 @@ func copyObjectMultipart(fs *Goofys, size int64, from string, to string, mpuId s
 }
 
 func copyObjectMaybeMultipart(fs *Goofys, size int64, from string, to string, srcEtag *string, metadata map[string]*string) (err error) {
-
+	fmt.Println("handles.go/copyObjectMaybeMultipart called")
 	if size == -1 || srcEtag == nil || metadata == nil {
 		params := &s3.HeadObjectInput{Bucket: &fs.bucket, Key: fs.key(from)}
 		resp, err := fs.s3.HeadObject(params)
@@ -945,6 +947,7 @@ func renameObject(fs *Goofys, size int64, fromFullName string, toFullName string
 }
 
 func (parent *Inode) addDotAndDotDot() {
+	fmt.Println("handles.go/addDotAndDotDot called")
 	fs := parent.fs
 	en := &DirHandleEntry{
 		Name:       aws.String("."),
@@ -983,6 +986,7 @@ func sealPastDirs(dirs map[*Inode]bool, d *Inode) {
 }
 
 func (parent *Inode) insertSubTree(path string, obj *s3.Object, dirs map[*Inode]bool) {
+	fmt.Println("handles.go/insertSubTree called")
 	fs := parent.fs
 	slash := strings.Index(path, "/")
 	if slash == -1 {
@@ -1033,6 +1037,7 @@ func (parent *Inode) findChildMaxTime() time.Time {
 }
 
 func (parent *Inode) readDirFromCache(offset fuseops.DirOffset) (en *DirHandleEntry, ok bool) {
+	fmt.Println("handles.go/readDirFromCache called")
 	parent.mu.Lock()
 	defer parent.mu.Unlock()
 
@@ -1061,6 +1066,7 @@ func (parent *Inode) readDirFromCache(offset fuseops.DirOffset) (en *DirHandleEn
 }
 
 func (parent *Inode) LookUpInodeNotDir(name string, c chan s3.HeadObjectOutput, errc chan error) {
+	fmt.Println("handles.go/LookUpInodeNotDir called")
 	params := &s3.HeadObjectInput{Bucket: &parent.fs.bucket, Key: parent.fs.key(name)}
 	resp, err := parent.fs.s3.HeadObject(params)
 	if err != nil {
@@ -1073,6 +1079,7 @@ func (parent *Inode) LookUpInodeNotDir(name string, c chan s3.HeadObjectOutput, 
 }
 
 func (parent *Inode) LookUpInodeDir(name string, c chan s3.ListObjectsOutput, errc chan error) {
+	fmt.Println("handles.go/LookUpInodeDir called")
 	params := &s3.ListObjectsInput{
 		Bucket:    &parent.fs.bucket,
 		Delimiter: aws.String("/"),
@@ -1092,6 +1099,7 @@ func (parent *Inode) LookUpInodeDir(name string, c chan s3.ListObjectsOutput, er
 
 // returned inode has nil Id
 func (parent *Inode) LookUpInodeMaybeDir(name string, fullName string) (inode *Inode, err error) {
+	fmt.Println("handles.go/LookUpInodeMaybeDir called")
 	errObjectChan := make(chan error, 1)
 	objectChan := make(chan s3.HeadObjectOutput, 1)
 	errDirBlobChan := make(chan error, 1)
