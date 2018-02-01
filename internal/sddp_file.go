@@ -81,7 +81,7 @@ func (fh *SDDP_FileHandle) initMPU() {
 	fs := fh.inode.fs
 
 	params := &s3.CreateMultipartUploadInput{
-		// Bucket:       &fs.bucket,
+		Bucket:       &fs.bucket,
 		Key:          fs.key(*fh.mpuKey),
 		StorageClass: &fs.flags.StorageClass,
 		ContentType:  fs.getMimeType(*fh.inode.FullName()),
@@ -129,7 +129,7 @@ func (fh *SDDP_FileHandle) mpuPartNoSpawn(buf *MBuf, part int) (err error) {
 	}
 
 	params := &s3.UploadPartInput{
-		// Bucket:     &fs.bucket,
+		Bucket:     &fs.bucket,
 		Key:        fs.key(*fh.inode.FullName()),
 		PartNumber: aws.Int64(int64(part)),
 		UploadId:   fh.mpuId,
@@ -279,8 +279,8 @@ func (b SDDP_S3ReadBuffer) Init(fh *SDDP_FileHandle, offset uint64, size uint32)
 
 	b.buf = Buffer{}.Init(mbuf, func() (io.ReadCloser, error) {
 		params := &s3.GetObjectInput{
-			// Bucket: &fs.bucket,
-			Key: fs.key(*fh.inode.FullName()),
+			Bucket: &fh.inode.Bucket,
+			Key:    fs.key(fh.inode.CloudName),
 		}
 
 		bytes := fmt.Sprintf("bytes=%v-%v", offset, offset+uint64(size)-1)
@@ -394,6 +394,7 @@ func (fh *SDDP_FileHandle) readAhead(offset uint64, needAtLeast int) (err error)
 }
 
 func (fh *SDDP_FileHandle) ReadFile(offset int64, buf []byte) (bytesRead int, err error) {
+	fmt.Println("sddp_file.go/ReadFile called")
 	fh.inode.logFuse("ReadFile", offset, len(buf))
 	defer func() {
 		fh.inode.logFuse("< ReadFile", bytesRead, err)
@@ -422,6 +423,7 @@ func (fh *SDDP_FileHandle) ReadFile(offset int64, buf []byte) (bytesRead int, er
 }
 
 func (fh *SDDP_FileHandle) readFile(offset int64, buf []byte) (bytesRead int, err error) {
+	fmt.Println("sddp_file.go/readFile called")
 	defer func() {
 		if bytesRead > 0 {
 			fh.readBufOffset += int64(bytesRead)
@@ -432,6 +434,7 @@ func (fh *SDDP_FileHandle) readFile(offset int64, buf []byte) (bytesRead int, er
 	}()
 
 	if uint64(offset) >= fh.inode.Attributes.Size {
+		fmt.Println("Nothing to read")
 		// nothing to read
 		if fh.inode.Invalid {
 			err = fuse.ENOENT
@@ -548,8 +551,8 @@ func (fh *SDDP_FileHandle) readFromStream(offset int64, buf []byte) (bytesRead i
 
 	if fh.reader == nil {
 		params := &s3.GetObjectInput{
-			// Bucket: &fs.bucket,
-			Key: fs.key(*fh.inode.FullName()),
+			Bucket: &fh.inode.Bucket,
+			Key:    fs.key(fh.inode.CloudName),
 		}
 
 		if offset != 0 {
@@ -582,6 +585,7 @@ func (fh *SDDP_FileHandle) readFromStream(offset int64, buf []byte) (bytesRead i
 }
 
 func (fh *SDDP_FileHandle) flushSmallFile() (err error) {
+	fmt.Println("sddp_file.go/flushSmallFile called")
 	buf := fh.buf
 	fh.buf = nil
 
@@ -599,7 +603,7 @@ func (fh *SDDP_FileHandle) flushSmallFile() (err error) {
 	}
 
 	params := &s3.PutObjectInput{
-		// Bucket:       &fs.bucket,
+		Bucket:       &fs.bucket,
 		Key:          fs.key(*fh.inode.FullName()),
 		Body:         buf,
 		StorageClass: &storageClass,
@@ -659,8 +663,8 @@ func (fh *SDDP_FileHandle) FlushFile() (err error) {
 			if fh.mpuId != nil {
 				go func() {
 					params := &s3.AbortMultipartUploadInput{
-						// Bucket:   &fs.bucket,
-						Key:      fs.key(*fh.inode.FullName()),
+						Bucket:   &fh.inode.Bucket,
+						Key:      fs.key(fh.inode.CloudName),
 						UploadId: fh.mpuId,
 					}
 
@@ -719,7 +723,7 @@ func (fh *SDDP_FileHandle) FlushFile() (err error) {
 	}
 
 	params := &s3.CompleteMultipartUploadInput{
-		// Bucket:   &fs.bucket,
+		Bucket:   &fh.inode.Bucket,
 		Key:      fs.key(*fh.mpuKey),
 		UploadId: fh.mpuId,
 		MultipartUpload: &s3.CompletedMultipartUpload{
@@ -737,9 +741,9 @@ func (fh *SDDP_FileHandle) FlushFile() (err error) {
 	s3Log.Debug(resp)
 	fh.mpuId = nil
 
-	if *fh.mpuKey != *fh.inode.FullName() {
+	if *fh.mpuKey != fh.inode.CloudName {
 		// the file was renamed
-		err = SDDP_renameObject(fs, fh.nextWriteOffset, *fh.mpuKey, *fh.inode.FullName())
+		err = SDDP_renameObject(fs, fh.nextWriteOffset, *fh.mpuKey, fh.inode.CloudName)
 	}
 
 	return

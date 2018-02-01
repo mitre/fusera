@@ -16,7 +16,6 @@ package internal
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -132,7 +131,7 @@ func (p SDDP_sortedDirents) Less(i, j int) bool { return *p[i].Name < *p[j].Name
 func (p SDDP_sortedDirents) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
 func (dh *SDDP_DirHandle) listObjectsSlurp(prefix string) (resp *s3.ListObjectsOutput, err error) {
-	fmt.Println("dir.go/listObjectsSlurp called")
+	fmt.Println("sddp_dir.go/listObjectsSlurp called")
 	var marker *string
 	reqPrefix := prefix
 	inode := dh.inode
@@ -147,7 +146,7 @@ func (dh *SDDP_DirHandle) listObjectsSlurp(prefix string) (resp *s3.ListObjectsO
 	}
 
 	params := &s3.ListObjectsInput{
-		// Bucket: &fs.bucket,
+		Bucket: &fs.bucket,
 		Prefix: &reqPrefix,
 		Marker: marker,
 	}
@@ -215,7 +214,7 @@ func (dh *SDDP_DirHandle) listObjectsSlurp(prefix string) (resp *s3.ListObjectsO
 }
 
 func (dh *SDDP_DirHandle) listObjects(prefix string) (resp *s3.ListObjectsOutput, err error) {
-	fmt.Println("dir.go/listObjects called")
+	fmt.Println("sddp_dir.go/listObjects called")
 	errSlurpChan := make(chan error, 1)
 	slurpChan := make(chan s3.ListObjectsOutput, 1)
 	errListChan := make(chan error, 1)
@@ -244,7 +243,7 @@ func (dh *SDDP_DirHandle) listObjects(prefix string) (resp *s3.ListObjectsOutput
 
 	listObjectsFlat := func() {
 		params := &s3.ListObjectsInput{
-			// Bucket:    &fs.bucket,
+			Bucket:    &fs.bucket,
 			Delimiter: aws.String("/"),
 			Marker:    dh.Marker,
 			Prefix:    &prefix,
@@ -309,7 +308,7 @@ func SDDP_objectToDirEntry(fs *SDDP, obj *s3.Object, name string, isDir bool) (e
 
 // LOCKS_REQUIRED(dh.mu)
 func (dh *SDDP_DirHandle) ReadDir(offset fuseops.DirOffset) (en *SDDP_DirHandleEntry, err error) {
-	fmt.Println("dir.go/ReadDir called")
+	fmt.Println("sddp_dir.go/ReadDir called")
 	// If the request is for offset zero, we assume that either this is the first
 	// call or rewinddir has been called. Reset state.
 	if offset == 0 {
@@ -356,102 +355,105 @@ func (dh *SDDP_DirHandle) ReadDir(offset fuseops.DirOffset) (en *SDDP_DirHandleE
 	}
 
 	if dh.Entries == nil {
-		// try not to hold the lock when we make the request
-		dh.mu.Unlock()
+		fmt.Println("sddp_dir.go/ReadDir:")
+		fmt.Println("Trying to call out to s3 when reading the directory.")
+		fmt.Println("Need to rewrite code to simply list the files the directory is supposed to contain.")
+		// 	// try not to hold the lock when we make the request
+		// 	dh.mu.Unlock()
 
-		prefix := *fs.key(*dh.inode.FullName())
-		if len(*dh.inode.FullName()) != 0 {
-			prefix += "/"
-		}
+		// 	prefix := *fs.key(*dh.inode.FullName())
+		// 	if len(*dh.inode.FullName()) != 0 {
+		// 		prefix += "/"
+		// 	}
 
-		resp, err := dh.listObjects(prefix)
-		if err != nil {
-			dh.mu.Lock()
-			return nil, mapAwsError(err)
-		}
+		// 	resp, err := dh.listObjects(prefix)
+		// 	if err != nil {
+		// 		dh.mu.Lock()
+		// 		return nil, mapAwsError(err)
+		// 	}
 
-		s3Log.Debug(resp)
-		dh.mu.Lock()
+		// 	s3Log.Debug(resp)
+		// 	dh.mu.Lock()
 
-		dh.Entries = make([]*SDDP_DirHandleEntry, 0, len(resp.CommonPrefixes)+len(resp.Contents))
+		// 	dh.Entries = make([]*SDDP_DirHandleEntry, 0, len(resp.CommonPrefixes)+len(resp.Contents))
 
-		// this is only returned for non-slurped responses
-		for _, dir := range resp.CommonPrefixes {
-			// strip trailing /
-			dirName := (*dir.Prefix)[0 : len(*dir.Prefix)-1]
-			// strip previous prefix
-			dirName = dirName[len(*resp.Prefix):]
-			if len(dirName) == 0 {
-				continue
-			}
-			en = &SDDP_DirHandleEntry{
-				Name:       &dirName,
-				Type:       fuseutil.DT_Directory,
-				Attributes: &fs.rootAttrs,
-			}
+		// 	// this is only returned for non-slurped responses
+		// 	for _, dir := range resp.CommonPrefixes {
+		// 		// strip trailing /
+		// 		dirName := (*dir.Prefix)[0 : len(*dir.Prefix)-1]
+		// 		// strip previous prefix
+		// 		dirName = dirName[len(*resp.Prefix):]
+		// 		if len(dirName) == 0 {
+		// 			continue
+		// 		}
+		// 		en = &SDDP_DirHandleEntry{
+		// 			Name:       &dirName,
+		// 			Type:       fuseutil.DT_Directory,
+		// 			Attributes: &fs.rootAttrs,
+		// 		}
 
-			dh.Entries = append(dh.Entries, en)
-		}
+		// 		dh.Entries = append(dh.Entries, en)
+		// 	}
 
-		lastDir := ""
-		for _, obj := range resp.Contents {
-			if !strings.HasPrefix(*obj.Key, prefix) {
-				// other slurped objects that we cached
-				continue
-			}
+		// 	lastDir := ""
+		// 	for _, obj := range resp.Contents {
+		// 		if !strings.HasPrefix(*obj.Key, prefix) {
+		// 			// other slurped objects that we cached
+		// 			continue
+		// 		}
 
-			baseName := (*obj.Key)[len(prefix):]
+		// 		baseName := (*obj.Key)[len(prefix):]
 
-			slash := strings.Index(baseName, "/")
-			if slash == -1 {
-				if len(baseName) == 0 {
-					// shouldn't happen
-					continue
-				}
-				dh.Entries = append(dh.Entries,
-					SDDP_objectToDirEntry(fs, obj, baseName, false))
-			} else {
-				// this is a slurped up object which
-				// was already cached, unless it's a
-				// directory right under this dir that
-				// we need to return
-				dirName := baseName[:slash]
-				if dirName != lastDir && lastDir != "" {
-					// make a copy so we can take the address
-					dir := lastDir
-					en := &SDDP_DirHandleEntry{
-						Name:       &dir,
-						Type:       fuseutil.DT_Directory,
-						Attributes: &fs.rootAttrs,
-					}
-					dh.Entries = append(dh.Entries, en)
-				}
-				lastDir = dirName
-			}
-		}
-		if lastDir != "" {
-			en := &SDDP_DirHandleEntry{
-				Name:       &lastDir,
-				Type:       fuseutil.DT_Directory,
-				Attributes: &fs.rootAttrs,
-			}
-			dh.Entries = append(dh.Entries, en)
-		}
+		// 		slash := strings.Index(baseName, "/")
+		// 		if slash == -1 {
+		// 			if len(baseName) == 0 {
+		// 				// shouldn't happen
+		// 				continue
+		// 			}
+		// 			dh.Entries = append(dh.Entries,
+		// 				SDDP_objectToDirEntry(fs, obj, baseName, false))
+		// 		} else {
+		// 			// this is a slurped up object which
+		// 			// was already cached, unless it's a
+		// 			// directory right under this dir that
+		// 			// we need to return
+		// 			dirName := baseName[:slash]
+		// 			if dirName != lastDir && lastDir != "" {
+		// 				// make a copy so we can take the address
+		// 				dir := lastDir
+		// 				en := &SDDP_DirHandleEntry{
+		// 					Name:       &dir,
+		// 					Type:       fuseutil.DT_Directory,
+		// 					Attributes: &fs.rootAttrs,
+		// 				}
+		// 				dh.Entries = append(dh.Entries, en)
+		// 			}
+		// 			lastDir = dirName
+		// 		}
+		// 	}
+		// 	if lastDir != "" {
+		// 		en := &SDDP_DirHandleEntry{
+		// 			Name:       &lastDir,
+		// 			Type:       fuseutil.DT_Directory,
+		// 			Attributes: &fs.rootAttrs,
+		// 		}
+		// 		dh.Entries = append(dh.Entries, en)
+		// 	}
 
-		sort.Sort(SDDP_sortedDirents(dh.Entries))
+		// 	sort.Sort(SDDP_sortedDirents(dh.Entries))
 
-		// Fix up offset fields.
-		for i := 0; i < len(dh.Entries); i++ {
-			en := dh.Entries[i]
-			// offset is 1 based, also need to account for "." and ".."
-			en.Offset = fuseops.DirOffset(i+dh.BaseOffset) + 1 + 2
-		}
+		// 	// Fix up offset fields.
+		// 	for i := 0; i < len(dh.Entries); i++ {
+		// 		en := dh.Entries[i]
+		// 		// offset is 1 based, also need to account for "." and ".."
+		// 		en.Offset = fuseops.DirOffset(i+dh.BaseOffset) + 1 + 2
+		// 	}
 
-		if *resp.IsTruncated {
-			dh.Marker = resp.NextMarker
-		} else {
-			dh.Marker = nil
-		}
+		// 	if *resp.IsTruncated {
+		// 		dh.Marker = resp.NextMarker
+		// 	} else {
+		// 		dh.Marker = nil
+		// 	}
 	}
 
 	if i == len(dh.Entries) {

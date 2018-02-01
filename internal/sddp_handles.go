@@ -42,6 +42,8 @@ type SDDP_InodeAttributes struct {
 type SDDP_Inode struct {
 	Id         fuseops.InodeID
 	Name       *string
+	Bucket     string
+	CloudName  string
 	fs         *SDDP
 	Attributes SDDP_InodeAttributes
 	KnownSize  *uint64
@@ -254,7 +256,9 @@ func (parent *SDDP_Inode) insertChildUnlocked(inode *SDDP_Inode) {
 }
 
 func (parent *SDDP_Inode) LookUp(name string) (inode *SDDP_Inode, err error) {
-	fmt.Println("handles.go/LookUp called")
+	fmt.Println("sddp_handles.go/LookUp called with")
+	fmt.Println("Name: ", name)
+
 	parent.logFuse("Inode.LookUp", name)
 
 	inode, err = parent.LookUpInodeMaybeDir(name, parent.getChildName(name))
@@ -304,8 +308,8 @@ func (parent *SDDP_Inode) Unlink(name string) (err error) {
 	fullName := parent.getChildName(name)
 
 	params := &s3.DeleteObjectInput{
-		// Bucket: &parent.fs.bucket,
-		Key: parent.fs.key(fullName),
+		Bucket: &parent.fs.bucket,
+		Key:    parent.fs.key(fullName),
 	}
 
 	resp, err := parent.fs.s3.DeleteObject(params)
@@ -328,7 +332,7 @@ func (parent *SDDP_Inode) Unlink(name string) (err error) {
 }
 
 func (parent *SDDP_Inode) Create(name string) (inode *SDDP_Inode, fh *SDDP_FileHandle) {
-	fmt.Println("handles.go/Create called")
+	fmt.Println("sddp_handles.go/Create called")
 	parent.logFuse("Create", name)
 	fullName := parent.getChildName(name)
 	fs := parent.fs
@@ -355,16 +359,16 @@ func (parent *SDDP_Inode) Create(name string) (inode *SDDP_Inode, fh *SDDP_FileH
 }
 
 func (parent *SDDP_Inode) MkDir(name string) (inode *SDDP_Inode, err error) {
-	fmt.Println("handles.go/MkDir called")
+	fmt.Println("sddp_handles.go/MkDir called")
 	parent.logFuse("MkDir", name)
 
 	fullName := parent.getChildName(name)
 	fs := parent.fs
 
 	params := &s3.PutObjectInput{
-		// Bucket: &fs.bucket,
-		Key:  fs.key(fullName + "/"),
-		Body: nil,
+		Bucket: &fs.bucket,
+		Key:    fs.key(fullName + "/"),
+		Body:   nil,
 	}
 
 	if fs.flags.UseSSE {
@@ -397,7 +401,7 @@ func SDDP_isEmptyDir(fs *SDDP, fullName string) (isDir bool, err error) {
 	fullName += "/"
 
 	params := &s3.ListObjectsInput{
-		// Bucket:    &fs.bucket,
+		Bucket:    &fs.bucket,
 		Delimiter: aws.String("/"),
 		MaxKeys:   aws.Int64(2),
 		Prefix:    fs.key(fullName),
@@ -442,8 +446,8 @@ func (parent *SDDP_Inode) RmDir(name string) (err error) {
 	fullName += "/"
 
 	params := &s3.DeleteObjectInput{
-		// Bucket: &fs.bucket,
-		Key: fs.key(fullName),
+		Bucket: &fs.bucket,
+		Key:    fs.key(fullName),
 	}
 
 	_, err = fs.s3.DeleteObject(params)
@@ -480,6 +484,7 @@ func (inode *SDDP_Inode) isDir() bool {
 
 // LOCKS_REQUIRED(inode.mu)
 func (inode *SDDP_Inode) fillXattrFromHead(resp *s3.HeadObjectOutput) {
+	fmt.Println("sddp_handles.go/fillXattrFromHead called")
 	inode.userMetadata = make(map[string][]byte)
 
 	if resp.ETag != nil {
@@ -503,6 +508,7 @@ func (inode *SDDP_Inode) fillXattrFromHead(resp *s3.HeadObjectOutput) {
 
 // LOCKS_REQUIRED(inode.mu)
 func (inode *SDDP_Inode) fillXattr() (err error) {
+	fmt.Println("sddp_handles.go/fillXattr called")
 	if !inode.ImplicitDir && inode.userMetadata == nil {
 
 		fullName := *inode.FullName()
@@ -512,8 +518,8 @@ func (inode *SDDP_Inode) fillXattr() (err error) {
 		fs := inode.fs
 
 		params := &s3.HeadObjectInput{
-			// Bucket: &fs.bucket,
-			Key: fs.key(fullName),
+			Bucket: &fs.bucket,
+			Key:    fs.key(fullName),
 		}
 		resp, err := fs.s3.HeadObject(params)
 		if err != nil {
@@ -652,6 +658,7 @@ func (inode *SDDP_Inode) GetXattr(name string) ([]byte, error) {
 }
 
 func (inode *SDDP_Inode) ListXattr() ([]string, error) {
+	fmt.Println("sddp_handles.go/ListXattr called")
 	inode.logFuse("ListXattr")
 
 	inode.mu.Lock()
@@ -676,7 +683,7 @@ func (inode *SDDP_Inode) ListXattr() ([]string, error) {
 }
 
 func (inode *SDDP_Inode) OpenFile() (fh *SDDP_FileHandle, err error) {
-	fmt.Println("handles.go/OpenFile called")
+	fmt.Println("sddp_handles.go/OpenFile called")
 	inode.logFuse("OpenFile")
 
 	inode.mu.Lock()
@@ -712,8 +719,8 @@ func (parent *SDDP_Inode) Rename(from string, newParent *SDDP_Inode, to string) 
 
 	if fromIsDir && !toIsDir {
 		_, err = fs.s3.HeadObject(&s3.HeadObjectInput{
-			// Bucket: &fs.bucket,
-			Key: fs.key(toFullName),
+			Bucket: &fs.bucket,
+			Key:    fs.key(toFullName),
 		})
 		if err == nil {
 			return fuse.ENOTDIR
@@ -748,7 +755,7 @@ func SDDP_mpuCopyPart(fs *SDDP, from string, to string, mpuId string, bytes stri
 	// XXX use CopySourceIfUnmodifiedSince to ensure that
 	// we are copying from the same object
 	params := &s3.UploadPartCopyInput{
-		// Bucket:            &fs.bucket,
+		Bucket:            &fs.bucket,
 		Key:               fs.key(to),
 		CopySource:        aws.String(pathEscape(from)),
 		UploadId:          &mpuId,
@@ -810,7 +817,7 @@ func SDDP_copyObjectMultipart(fs *SDDP, size int64, from string, to string, mpuI
 
 	if mpuId == "" {
 		params := &s3.CreateMultipartUploadInput{
-			// Bucket:       &fs.bucket,
+			Bucket:       &fs.bucket,
 			Key:          fs.key(to),
 			StorageClass: &fs.flags.StorageClass,
 			ContentType:  fs.getMimeType(to),
@@ -851,7 +858,7 @@ func SDDP_copyObjectMultipart(fs *SDDP, size int64, from string, to string, mpuI
 		}
 
 		params := &s3.CompleteMultipartUploadInput{
-			// Bucket:   &fs.bucket,
+			Bucket:   &fs.bucket,
 			Key:      fs.key(to),
 			UploadId: &mpuId,
 			MultipartUpload: &s3.CompletedMultipartUpload{
@@ -872,11 +879,11 @@ func SDDP_copyObjectMultipart(fs *SDDP, size int64, from string, to string, mpuI
 }
 
 func SDDP_copyObjectMaybeMultipart(fs *SDDP, size int64, from string, to string, srcEtag *string, metadata map[string]*string) (err error) {
-	fmt.Println("handles.go/copyObjectMaybeMultipart called")
+	fmt.Println("sddp_handles.go/copyObjectMaybeMultipart called")
 	if size == -1 || srcEtag == nil || metadata == nil {
 		params := &s3.HeadObjectInput{
-			// Bucket: &fs.bucket,
-			Key: fs.key(from),
+			Bucket: &fs.bucket,
+			Key:    fs.key(from),
 		}
 		resp, err := fs.s3.HeadObject(params)
 		if err != nil {
@@ -888,8 +895,7 @@ func SDDP_copyObjectMaybeMultipart(fs *SDDP, size int64, from string, to string,
 		srcEtag = resp.ETag
 	}
 
-	// from = fs.bucket + "/" + *fs.key(from)
-	from = "/" + *fs.key(from)
+	from = fs.bucket + "/" + *fs.key(from)
 
 	if size > 5*1024*1024*1024 {
 		return SDDP_copyObjectMultipart(fs, size, from, to, "", srcEtag, metadata)
@@ -901,7 +907,7 @@ func SDDP_copyObjectMaybeMultipart(fs *SDDP, size int64, from string, to string,
 	}
 
 	params := &s3.CopyObjectInput{
-		// Bucket:            &fs.bucket,
+		Bucket:            &fs.bucket,
 		CopySource:        aws.String(pathEscape(from)),
 		Key:               fs.key(to),
 		StorageClass:      &storageClass,
@@ -940,8 +946,8 @@ func SDDP_renameObject(fs *SDDP, size int64, fromFullName string, toFullName str
 	}
 
 	delParams := &s3.DeleteObjectInput{
-		// Bucket: &fs.bucket,
-		Key: fs.key(fromFullName),
+		Bucket: &fs.bucket,
+		Key:    fs.key(fromFullName),
 	}
 
 	_, err = fs.s3.DeleteObject(delParams)
@@ -954,7 +960,7 @@ func SDDP_renameObject(fs *SDDP, size int64, fromFullName string, toFullName str
 }
 
 func (parent *SDDP_Inode) addDotAndDotDot() {
-	fmt.Println("handles.go/addDotAndDotDot called")
+	fmt.Println("sddp_handles.go/addDotAndDotDot called")
 	fs := parent.fs
 	en := &SDDP_DirHandleEntry{
 		Name:       aws.String("."),
@@ -993,7 +999,7 @@ func SDDP_sealPastDirs(dirs map[*SDDP_Inode]bool, d *SDDP_Inode) {
 }
 
 func (parent *SDDP_Inode) insertSubTree(path string, obj *s3.Object, dirs map[*SDDP_Inode]bool) {
-	fmt.Println("handles.go/insertSubTree called")
+	fmt.Println("sddp_handles.go/insertSubTree called")
 	fs := parent.fs
 	slash := strings.Index(path, "/")
 	if slash == -1 {
@@ -1044,7 +1050,7 @@ func (parent *SDDP_Inode) findChildMaxTime() time.Time {
 }
 
 func (parent *SDDP_Inode) readDirFromCache(offset fuseops.DirOffset) (en *SDDP_DirHandleEntry, ok bool) {
-	fmt.Println("handles.go/readDirFromCache called")
+	fmt.Println("sddp_handles.go/readDirFromCache called")
 	parent.mu.Lock()
 	defer parent.mu.Unlock()
 
@@ -1073,10 +1079,10 @@ func (parent *SDDP_Inode) readDirFromCache(offset fuseops.DirOffset) (en *SDDP_D
 }
 
 func (parent *SDDP_Inode) LookUpInodeNotDir(name string, c chan s3.HeadObjectOutput, errc chan error) {
-	fmt.Println("handles.go/LookUpInodeNotDir called")
+	fmt.Println("sddp_handles.go/LookUpInodeNotDir called")
 	params := &s3.HeadObjectInput{
-		// Bucket: &parent.fs.bucket,
-		Key: parent.fs.key(name),
+		Bucket: &parent.fs.bucket,
+		Key:    parent.fs.key(name),
 	}
 	resp, err := parent.fs.s3.HeadObject(params)
 	if err != nil {
@@ -1089,9 +1095,9 @@ func (parent *SDDP_Inode) LookUpInodeNotDir(name string, c chan s3.HeadObjectOut
 }
 
 func (parent *SDDP_Inode) LookUpInodeDir(name string, c chan s3.ListObjectsOutput, errc chan error) {
-	fmt.Println("handles.go/LookUpInodeDir called")
+	fmt.Println("sddp_handles.go/LookUpInodeDir called")
 	params := &s3.ListObjectsInput{
-		// Bucket:    &parent.fs.bucket,
+		Bucket:    &parent.fs.bucket,
 		Delimiter: aws.String("/"),
 		MaxKeys:   aws.Int64(1),
 		Prefix:    parent.fs.key(name + "/"),
@@ -1109,7 +1115,9 @@ func (parent *SDDP_Inode) LookUpInodeDir(name string, c chan s3.ListObjectsOutpu
 
 // returned inode has nil Id
 func (parent *SDDP_Inode) LookUpInodeMaybeDir(name string, fullName string) (inode *SDDP_Inode, err error) {
-	fmt.Println("handles.go/LookUpInodeMaybeDir called")
+	fmt.Println("sddp_handles.go/LookUpInodeMaybeDir called")
+	fmt.Println("Name: ", name)
+	fmt.Println("Full Name: ", fullName)
 	errObjectChan := make(chan error, 1)
 	objectChan := make(chan s3.HeadObjectOutput, 1)
 	errDirBlobChan := make(chan error, 1)
