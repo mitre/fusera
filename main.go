@@ -142,7 +142,7 @@ func main() {
 	var child *os.Process
 
 	app.Action = func(c *cli.Context) (err error) {
-		// We should get two arguments exactly. Otherwise error out.
+		// We should get one argument exactly. Otherwise error out.
 		if len(c.Args()) != 1 {
 			fmt.Fprintf(
 				os.Stderr,
@@ -153,7 +153,6 @@ func main() {
 		}
 
 		// Populate and parse flags.
-		//mountPoint := c.Args()[0]
 		fmt.Println("about to PopulateFlags")
 		flags = PopulateFlags(c)
 		if flags == nil {
@@ -167,13 +166,9 @@ func main() {
 		}()
 
 		// Evaluate mandatory flags
-		if flags.Ncg == "" {
-			return fmt.Errorf("sddp expects an ncg file")
-		}
 		if flags.Acc == nil {
-			return fmt.Errorf("sddp expects a list of accesions")
+			return fmt.Errorf("sddp expects a list of accessions")
 		}
-		fmt.Println("Ncg:", flags.Ncg)
 		fmt.Println("Acc:", flags.Acc)
 
 		if !flags.Foreground {

@@ -224,13 +224,13 @@ func NewApp() (app *cli.App) {
 
 			cli.DurationFlag{
 				Name:  "stat-cache-ttl",
-				Value: time.Minute,
+				Value: time.Hour * 24 * 365 * 7,
 				Usage: "How long to cache StatObject results and inode attributes.",
 			},
 
 			cli.DurationFlag{
 				Name:  "type-cache-ttl",
-				Value: time.Minute,
+				Value: time.Hour * 24 * 365 * 7,
 				Usage: "How long to cache name -> file/dir mappings in directory " +
 					"inodes.",
 			},
