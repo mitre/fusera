@@ -34,7 +34,7 @@ type SignedUrl struct {
 }
 
 func resolveNames(loc string, ncg string, acc []string) Payload {
-	url := "http://localhost:8080/"
+	url := "http://localhost:8000/"
 	accString := strings.Join(acc, ",")
 	q := fmt.Sprintf("version=xc-1.0&format=json&location=%s&ncg=%s&acc=%s", loc, ncg, accString)
 	query := strings.NewReader(q)
