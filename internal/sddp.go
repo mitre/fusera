@@ -520,19 +520,19 @@ func (fs *SDDP) LookUpInode(ctx context.Context, op *fuseops.LookUpInodeOp) (err
 		ok = true
 		inode.Ref()
 
-		if expired(inode.AttrTime, fs.flags.StatCacheTTL) {
-			ok = false
-			if inode.fileHandles != 0 {
-				// we have an open file handle, object
-				// in S3 may not represent the true
-				// state of the file anyway, so just
-				// return what we know which is
-				// potentially more accurate
-				ok = true
-			} else {
-				inode.logFuse("lookup expired")
-			}
-		}
+		// if expired(inode.AttrTime, fs.flags.StatCacheTTL) {
+		// 	ok = false
+		// 	if inode.fileHandles != 0 {
+		// 		// we have an open file handle, object
+		// 		// in S3 may not represent the true
+		// 		// state of the file anyway, so just
+		// 		// return what we know which is
+		// 		// potentially more accurate
+		// 		ok = true
+		// 	} else {
+		// 		inode.logFuse("lookup expired")
+		// 	}
+		// }
 	} else {
 		ok = false
 	}
@@ -540,43 +540,44 @@ func (fs *SDDP) LookUpInode(ctx context.Context, op *fuseops.LookUpInodeOp) (err
 	parent.mu.Unlock()
 
 	if !ok {
-		var newInode *SDDP_Inode
+		return fuse.ENOENT
+		// var newInode *SDDP_Inode
 
-		newInode, err = parent.LookUp(op.Name)
-		if err != nil {
-			if inode != nil {
-				// just kidding! pretend we didn't up the ref
-				fs.mu.Lock()
-				defer fs.mu.Unlock()
+		// newInode, err = parent.LookUp(op.Name)
+		// if err != nil {
+		// 	if inode != nil {
+		// 		// just kidding! pretend we didn't up the ref
+		// 		fs.mu.Lock()
+		// 		defer fs.mu.Unlock()
 
-				stale := inode.DeRef(1)
-				if stale {
-					delete(fs.inodes, inode.Id)
-					parent.removeChild(inode)
-				}
-			}
-			return err
-		}
+		// 		stale := inode.DeRef(1)
+		// 		if stale {
+		// 			delete(fs.inodes, inode.Id)
+		// 			parent.removeChild(inode)
+		// 		}
+		// 	}
+		// 	return err
+		// }
 
-		if inode == nil {
-			parent.mu.Lock()
-			// check again if it's there, could have been
-			// added by another lookup or readdir
-			inode = parent.findChildUnlockedFull(op.Name)
-			if inode == nil {
-				fs.mu.Lock()
-				inode = newInode
-				fs.insertInode(parent, inode)
-				fs.mu.Unlock()
-			}
-			parent.mu.Unlock()
-		} else {
-			if newInode.Attributes.Mtime.IsZero() {
-				newInode.Attributes.Mtime = inode.Attributes.Mtime
-			}
-			inode.Attributes = newInode.Attributes
-			inode.AttrTime = time.Now()
-		}
+		// if inode == nil {
+		// 	parent.mu.Lock()
+		// 	// check again if it's there, could have been
+		// 	// added by another lookup or readdir
+		// 	inode = parent.findChildUnlockedFull(op.Name)
+		// 	if inode == nil {
+		// 		fs.mu.Lock()
+		// 		inode = newInode
+		// 		fs.insertInode(parent, inode)
+		// 		fs.mu.Unlock()
+		// 	}
+		// 	parent.mu.Unlock()
+		// } else {
+		// 	if newInode.Attributes.Mtime.IsZero() {
+		// 		newInode.Attributes.Mtime = inode.Attributes.Mtime
+		// 	}
+		// 	inode.Attributes = newInode.Attributes
+		// 	inode.AttrTime = time.Now()
+		// }
 	}
 
 	op.Entry.Child = inode.Id
