@@ -20,6 +20,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/kahing/goofys/nr"
 	"github.com/sirupsen/logrus"
 
 	"github.com/jacobsa/fuse"
@@ -59,12 +60,12 @@ func SDDP_Mount(ctx context.Context, flags *FlagStorage) (*SDDP, *fuse.MountedFi
 }
 
 func NewSDDP(ctx context.Context, awsConfig *aws.Config, flags *FlagStorage) *SDDP {
-	payload := resolveNames(flags.Loc, flags.Ncg, flags.Acc)
-	bucket := getBucketName(payload)
+	payload := nr.ResolveNames(flags.Loc, flags.Ncg, flags.Acc)
+	bucket := "1000genomes"
 	fmt.Println("got bucket name: ", bucket)
 	fs := &SDDP{
 		bucket: bucket,
-		accs:   payload.Accessions,
+		accs:   payload,
 		flags:  flags,
 		umask:  0122,
 	}
@@ -159,7 +160,7 @@ func NewSDDP(ctx context.Context, awsConfig *aws.Config, flags *FlagStorage) *SD
 
 	http.DefaultTransport.(*http.Transport).MaxIdleConnsPerHost = 1000
 
-	for _, acc := range payload.Accessions {
+	for _, acc := range payload {
 		// make directories here
 		// dir
 		fullName := root.getChildName(acc.ID)
@@ -179,10 +180,10 @@ func NewSDDP(ctx context.Context, awsConfig *aws.Config, flags *FlagStorage) *SD
 			dir.mu.Lock()
 			file := SDDP_NewInode(fs, dir, &f.Name, &fullName)
 			// TODO: This will have to change when the real API is made
-			file.Bucket = f.SignedUrl.Link
-			file.CloudName = f.Name
+			file.Bucket = "1000genomes"
+			file.CloudName = "phase3/data/NA19036/alignment/" + f.Name
 			file.Attributes = SDDP_InodeAttributes{
-				Size:  f.Size,
+				Size:  uint64(f.Size),
 				Mtime: time.Now(),
 			}
 			fh := SDDP_NewFileHandle(file)
@@ -221,7 +222,7 @@ type SDDP struct {
 	prefix string
 
 	// SDDP specific info
-	accs []Accession
+	accs []nr.Accession
 
 	flags *FlagStorage
 
