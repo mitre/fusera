@@ -23,6 +23,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/kahing/goofys/awsutil"
 
 	"github.com/jacobsa/fuse"
 )
@@ -547,24 +548,27 @@ func (fh *SDDP_FileHandle) readFromStream(offset int64, buf []byte) (bytesRead i
 		return
 	}
 
-	fs := fh.inode.fs
+	// fs := fh.inode.fs
 
 	if fh.reader == nil {
-		params := &s3.GetObjectInput{
-			Bucket: &fh.inode.Bucket,
-			Key:    fs.key(fh.inode.CloudName),
-		}
+		// params := &s3.GetObjectInput{
+		// 	Bucket: &fh.inode.Bucket,
+		// 	Key:    fs.key(fh.inode.CloudName),
+		// }
 
+		bytes := ""
 		if offset != 0 {
-			bytes := fmt.Sprintf("bytes=%v-", offset)
-			params.Range = &bytes
+			bytes = fmt.Sprintf("bytes=%v-", offset)
 		}
 
-		req, resp := fs.s3.GetObjectRequest(params)
-
-		err = req.Send()
+		// req, resp := fs.s3.GetObjectRequest(params)
+		// err = req.Send()
+		// if err != nil {
+		// 	return bytesRead, mapAwsError(err)
+		// }
+		resp, err := awsutil.GetObjectRange(fh.inode.Link, bytes)
 		if err != nil {
-			return bytesRead, mapAwsError(err)
+			panic("err with new awsutil.GetObjectRange")
 		}
 
 		fh.reader = resp.Body

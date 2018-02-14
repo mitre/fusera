@@ -81,56 +81,56 @@ func NewSDDP(ctx context.Context, awsConfig *aws.Config, flags *FlagStorage) *SD
 	fs.s3 = fs.newS3()
 
 	// We no longer want to immediately start messing with buckets
-	var isAws bool
-	var err error
-	if !fs.flags.RegionSet {
-		fmt.Println("resolving region")
-		err, isAws = fs.detectBucketLocationByHEAD()
-		if err == nil {
-			// we detected a region header, this is probably AWS S3,
-			// or we can use anonymous access, or both
-			fs.sess = session.New(awsConfig)
-			fs.s3 = fs.newS3()
-		} else if err == fuse.ENOENT {
-			log.Errorf("bucket %v does not exist", fs.bucket)
-			return nil
-		} else {
-			// this is NOT AWS, we expect the request to fail with 403 if this is not
-			// an anonymous bucket
-			if err != syscall.EACCES {
-				log.Errorf("Unable to access '%v': %v", fs.bucket, err)
-			}
-		}
-	}
+	// var isAws bool
+	// var err error
+	// if !fs.flags.RegionSet {
+	// 	fmt.Println("resolving region")
+	// 	err, isAws = fs.detectBucketLocationByHEAD()
+	// 	if err == nil {
+	// 		// we detected a region header, this is probably AWS S3,
+	// 		// or we can use anonymous access, or both
+	// 		fs.sess = session.New(awsConfig)
+	// 		fs.s3 = fs.newS3()
+	// 	} else if err == fuse.ENOENT {
+	// 		log.Errorf("bucket %v does not exist", fs.bucket)
+	// 		return nil
+	// 	} else {
+	// 		// this is NOT AWS, we expect the request to fail with 403 if this is not
+	// 		// an anonymous bucket
+	// 		if err != syscall.EACCES {
+	// 			log.Errorf("Unable to access '%v': %v", fs.bucket, err)
+	// 		}
+	// 	}
+	// }
 
-	// try again with the credential to make sure
-	err = mapAwsError(fs.testBucket())
-	if err != nil {
-		if !isAws {
-			// EMC returns 403 because it doesn't support v4 signing
-			// swift3, ceph-s3 returns 400
-			// Amplidata just gives up and return 500
-			if err == syscall.EACCES || err == fuse.EINVAL || err == syscall.EAGAIN {
-				fs.fallbackV2Signer()
-				err = mapAwsError(fs.testBucket())
-			}
-		}
+	// // try again with the credential to make sure
+	// err = mapAwsError(fs.testBucket())
+	// if err != nil {
+	// 	if !isAws {
+	// 		// EMC returns 403 because it doesn't support v4 signing
+	// 		// swift3, ceph-s3 returns 400
+	// 		// Amplidata just gives up and return 500
+	// 		if err == syscall.EACCES || err == fuse.EINVAL || err == syscall.EAGAIN {
+	// 			fs.fallbackV2Signer()
+	// 			err = mapAwsError(fs.testBucket())
+	// 		}
+	// 	}
 
-		if err != nil {
-			log.Errorf("Unable to access '%v': %v", fs.bucket, err)
-			return nil
-		}
-	}
+	// 	if err != nil {
+	// 		log.Errorf("Unable to access '%v': %v", fs.bucket, err)
+	// 		return nil
+	// 	}
+	// }
 
-	go fs.cleanUpOldMPU()
+	// go fs.cleanUpOldMPU()
 
-	if flags.UseKMS {
-		//SSE header string for KMS server-side encryption (SSE-KMS)
-		fs.sseType = s3.ServerSideEncryptionAwsKms
-	} else if flags.UseSSE {
-		//SSE header string for non-KMS server-side encryption (SSE-S3)
-		fs.sseType = s3.ServerSideEncryptionAes256
-	}
+	// if flags.UseKMS {
+	// 	//SSE header string for KMS server-side encryption (SSE-KMS)
+	// 	fs.sseType = s3.ServerSideEncryptionAwsKms
+	// } else if flags.UseSSE {
+	// 	//SSE header string for non-KMS server-side encryption (SSE-S3)
+	// 	fs.sseType = s3.ServerSideEncryptionAes256
+	// }
 
 	now := time.Now()
 	fs.rootAttrs = SDDP_InodeAttributes{
@@ -184,6 +184,7 @@ func NewSDDP(ctx context.Context, awsConfig *aws.Config, flags *FlagStorage) *SD
 			// TODO: This will have to change when the real API is made
 			file.Bucket = "1000genomes"
 			file.CloudName = "phase3/data/NA19036/alignment/" + payload[i].Files[j].Name
+			file.Link = payload[i].Files[j].Link
 			u, err := strconv.ParseUint(payload[i].Files[j].Size, 10, 64)
 			if err != nil {
 				panic("failed to parse size into a uint64")
@@ -519,20 +520,6 @@ func (fs *SDDP) LookUpInode(ctx context.Context, op *fuseops.LookUpInodeOp) (err
 	if inode != nil {
 		ok = true
 		inode.Ref()
-
-		// if expired(inode.AttrTime, fs.flags.StatCacheTTL) {
-		// 	ok = false
-		// 	if inode.fileHandles != 0 {
-		// 		// we have an open file handle, object
-		// 		// in S3 may not represent the true
-		// 		// state of the file anyway, so just
-		// 		// return what we know which is
-		// 		// potentially more accurate
-		// 		ok = true
-		// 	} else {
-		// 		inode.logFuse("lookup expired")
-		// 	}
-		// }
 	} else {
 		ok = false
 	}
@@ -541,43 +528,6 @@ func (fs *SDDP) LookUpInode(ctx context.Context, op *fuseops.LookUpInodeOp) (err
 
 	if !ok {
 		return fuse.ENOENT
-		// var newInode *SDDP_Inode
-
-		// newInode, err = parent.LookUp(op.Name)
-		// if err != nil {
-		// 	if inode != nil {
-		// 		// just kidding! pretend we didn't up the ref
-		// 		fs.mu.Lock()
-		// 		defer fs.mu.Unlock()
-
-		// 		stale := inode.DeRef(1)
-		// 		if stale {
-		// 			delete(fs.inodes, inode.Id)
-		// 			parent.removeChild(inode)
-		// 		}
-		// 	}
-		// 	return err
-		// }
-
-		// if inode == nil {
-		// 	parent.mu.Lock()
-		// 	// check again if it's there, could have been
-		// 	// added by another lookup or readdir
-		// 	inode = parent.findChildUnlockedFull(op.Name)
-		// 	if inode == nil {
-		// 		fs.mu.Lock()
-		// 		inode = newInode
-		// 		fs.insertInode(parent, inode)
-		// 		fs.mu.Unlock()
-		// 	}
-		// 	parent.mu.Unlock()
-		// } else {
-		// 	if newInode.Attributes.Mtime.IsZero() {
-		// 		newInode.Attributes.Mtime = inode.Attributes.Mtime
-		// 	}
-		// 	inode.Attributes = newInode.Attributes
-		// 	inode.AttrTime = time.Now()
-		// }
 	}
 
 	op.Entry.Child = inode.Id

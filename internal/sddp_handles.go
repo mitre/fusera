@@ -44,6 +44,7 @@ type SDDP_Inode struct {
 	Name       *string
 	Bucket     string
 	CloudName  string
+	Link       string
 	fs         *SDDP
 	Attributes SDDP_InodeAttributes
 	KnownSize  *uint64
@@ -253,20 +254,6 @@ func (parent *SDDP_Inode) insertChildUnlocked(inode *SDDP_Inode) {
 		copy(parent.dir.Children[i+1:], parent.dir.Children[i:])
 		parent.dir.Children[i] = inode
 	}
-}
-
-func (parent *SDDP_Inode) LookUp(name string) (inode *SDDP_Inode, err error) {
-	fmt.Println("sddp_handles.go/LookUp called with")
-	fmt.Println("Name: ", name)
-
-	parent.logFuse("Inode.LookUp", name)
-
-	inode, err = parent.LookUpInodeMaybeDir(name, parent.getChildName(name))
-	if err != nil {
-		return nil, err
-	}
-
-	return
 }
 
 func (parent *SDDP_Inode) getChildName(name string) string {
@@ -1111,129 +1098,4 @@ func (parent *SDDP_Inode) LookUpInodeDir(name string, c chan s3.ListObjectsOutpu
 
 	s3Log.Debug(resp)
 	c <- *resp
-}
-
-// returned inode has nil Id
-func (parent *SDDP_Inode) LookUpInodeMaybeDir(name string, fullName string) (inode *SDDP_Inode, err error) {
-	fmt.Println("sddp_handles.go/LookUpInodeMaybeDir called")
-	fmt.Println("Name: ", name)
-	fmt.Println("Full Name: ", fullName)
-	errObjectChan := make(chan error, 1)
-	objectChan := make(chan s3.HeadObjectOutput, 1)
-	errDirBlobChan := make(chan error, 1)
-	dirBlobChan := make(chan s3.HeadObjectOutput, 1)
-	var errDirChan chan error
-	var dirChan chan s3.ListObjectsOutput
-
-	checking := 3
-	var checkErr [3]error
-
-	if parent.fs.s3 == nil {
-		panic("s3 disabled")
-	}
-
-	go parent.LookUpInodeNotDir(fullName, objectChan, errObjectChan)
-	if !parent.fs.flags.Cheap {
-		go parent.LookUpInodeNotDir(fullName+"/", dirBlobChan, errDirBlobChan)
-		if !parent.fs.flags.ExplicitDir {
-			errDirChan = make(chan error, 1)
-			dirChan = make(chan s3.ListObjectsOutput, 1)
-			go parent.LookUpInodeDir(fullName, dirChan, errDirChan)
-		}
-	}
-
-	for {
-		select {
-		case resp := <-objectChan:
-			err = nil
-			// XXX/TODO if both object and object/ exists, return dir
-			inode = SDDP_NewInode(parent.fs, parent, &name, &fullName)
-			inode.Attributes = SDDP_InodeAttributes{
-				Size:  uint64(aws.Int64Value(resp.ContentLength)),
-				Mtime: *resp.LastModified,
-			}
-
-			// don't want to point to the attribute because that
-			// can get updated
-			size := inode.Attributes.Size
-			inode.KnownSize = &size
-
-			inode.fillXattrFromHead(&resp)
-			return
-		case err = <-errObjectChan:
-			checking--
-			checkErr[0] = err
-			s3Log.Debugf("HEAD %v = %v", fullName, err)
-		case resp := <-dirChan:
-			err = nil
-			if len(resp.CommonPrefixes) != 0 || len(resp.Contents) != 0 {
-				inode = SDDP_NewInode(parent.fs, parent, &name, &fullName)
-				inode.ToDir()
-				if len(resp.Contents) != 0 && *resp.Contents[0].Key == name+"/" {
-					// it's actually a dir blob
-					entry := resp.Contents[0]
-					if entry.ETag != nil {
-						inode.s3Metadata["etag"] = []byte(*entry.ETag)
-					}
-					if entry.StorageClass != nil {
-						inode.s3Metadata["storage-class"] = []byte(*entry.StorageClass)
-					}
-
-				}
-				// if cheap is not on, the dir blob
-				// could exist but this returned first
-				if inode.fs.flags.Cheap {
-					inode.ImplicitDir = true
-				}
-				return
-			} else {
-				checkErr[2] = fuse.ENOENT
-				checking--
-			}
-		case err = <-errDirChan:
-			checking--
-			checkErr[2] = err
-			s3Log.Debugf("LIST %v/ = %v", fullName, err)
-		case resp := <-dirBlobChan:
-			err = nil
-			inode = SDDP_NewInode(parent.fs, parent, &name, &fullName)
-			inode.ToDir()
-			inode.Attributes.Mtime = *resp.LastModified
-			inode.fillXattrFromHead(&resp)
-			return
-		case err = <-errDirBlobChan:
-			checking--
-			checkErr[1] = err
-			s3Log.Debugf("HEAD %v/ = %v", fullName, err)
-		}
-
-		switch checking {
-		case 2:
-			if parent.fs.flags.Cheap {
-				go parent.LookUpInodeNotDir(fullName+"/", dirBlobChan, errDirBlobChan)
-			}
-		case 1:
-			if parent.fs.flags.ExplicitDir {
-				checkErr[2] = fuse.ENOENT
-				goto doneCase
-			} else if parent.fs.flags.Cheap {
-				errDirChan = make(chan error, 1)
-				dirChan = make(chan s3.ListObjectsOutput, 1)
-				go parent.LookUpInodeDir(fullName, dirChan, errDirChan)
-			}
-			break
-		doneCase:
-			fallthrough
-		case 0:
-			for _, e := range checkErr {
-				if e != fuse.ENOENT {
-					err = e
-					return
-				}
-			}
-
-			err = fuse.ENOENT
-			return
-		}
-	}
 }
