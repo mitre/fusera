@@ -160,12 +160,13 @@ func NewSDDP(ctx context.Context, awsConfig *aws.Config, flags *FlagStorage) *SD
 
 	http.DefaultTransport.(*http.Transport).MaxIdleConnsPerHost = 1000
 
-	for _, acc := range payload {
+	for i := range payload {
 		// make directories here
 		// dir
-		fullName := root.getChildName(acc.ID)
+		fmt.Println("making dir: ", payload[i].ID)
+		fullDirName := root.getChildName(payload[i].ID)
 		root.mu.Lock()
-		dir := SDDP_NewInode(fs, root, &acc.ID, &fullName)
+		dir := SDDP_NewInode(fs, root, &payload[i].ID, &fullDirName)
 		dir.ToDir()
 		dir.touch()
 		root.mu.Unlock()
@@ -175,15 +176,20 @@ func NewSDDP(ctx context.Context, awsConfig *aws.Config, flags *FlagStorage) *SD
 		// maybe do this?
 		// dir.addDotAndDotDot()
 		// put some files in the dirs
-		for _, f := range acc.Files {
-			fullName = dir.getChildName(f.Name)
+		for j := range payload[i].Files {
+			fmt.Println("making file: ", payload[i].Files[j].Name)
+			fullFileName := dir.getChildName(payload[i].Files[j].Name)
 			dir.mu.Lock()
-			file := SDDP_NewInode(fs, dir, &f.Name, &fullName)
+			file := SDDP_NewInode(fs, dir, &payload[i].Files[j].Name, &fullFileName)
 			// TODO: This will have to change when the real API is made
 			file.Bucket = "1000genomes"
-			file.CloudName = "phase3/data/NA19036/alignment/" + f.Name
+			file.CloudName = "phase3/data/NA19036/alignment/" + payload[i].Files[j].Name
+			u, err := strconv.ParseUint(payload[i].Files[j].Size, 10, 64)
+			if err != nil {
+				panic("failed to parse size into a uint64")
+			}
 			file.Attributes = SDDP_InodeAttributes{
-				Size:  uint64(f.Size),
+				Size:  u,
 				Mtime: time.Now(),
 			}
 			fh := SDDP_NewFileHandle(file)
