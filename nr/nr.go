@@ -14,10 +14,10 @@ import (
 )
 
 func ResolveNames(loc string, ncg string, accs []string) []Accession {
-	// url := "https://www.ncbi.nlm.nih.gov/Traces/names_test/"
-	url := "http://localhost:8000/"
-	acc := strings.Join(accs, ",")
-	fmt.Println("accs sent to name resolver: ", acc)
+	url := "https://www.ncbi.nlm.nih.gov/Traces/names_test/names.cgi"
+	// url := "http://localhost:8000/"
+	// acc := strings.Join(accs, ",")
+	// fmt.Println("accs sent to name resolver: ", acc)
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 	if ncg != "" {
@@ -46,15 +46,22 @@ func ResolveNames(loc string, ncg string, accs []string) []Accession {
 	}
 	if loc != "" {
 		fmt.Println("loc: ", loc)
-		if err := writer.WriteField("loc", loc); err != nil {
+		if err := writer.WriteField("location", loc); err != nil {
 			panic("could not write loc field to multipart.Writer")
 		}
 	}
-	if acc != "" {
-		if err := writer.WriteField("acc", acc); err != nil {
-			panic("could not write acc field to multipart.Writer")
+	if accs != nil {
+		for _, acc := range accs {
+			if err := writer.WriteField("acc", acc); err != nil {
+				panic("could not write acc field to multipart.Writer")
+			}
 		}
 	}
+	// if acc != "" {
+	// 	if err := writer.WriteField("acc", acc); err != nil {
+	// 		panic("could not write acc field to multipart.Writer")
+	// 	}
+	// }
 	if err := writer.Close(); err != nil {
 		panic("could not close multipart.Writer")
 	}
