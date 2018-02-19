@@ -23,7 +23,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/kahing/goofys/awsutil"
+	"github.com/mitre/fusera/awsutil"
 
 	"github.com/jacobsa/fuse"
 )

@@ -35,7 +35,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/kahing/goofys/nr"
+	"github.com/mitre/fusera/nr"
 	"github.com/sirupsen/logrus"
 
 	"github.com/jacobsa/fuse"
