@@ -34,24 +34,27 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type InodeAttributes struct {
+type SDDP_InodeAttributes struct {
 	Size  uint64
 	Mtime time.Time
 }
 
-type Inode struct {
+type SDDP_Inode struct {
 	Id         fuseops.InodeID
 	Name       *string
-	fs         *Goofys
-	Attributes InodeAttributes
+	Bucket     string
+	CloudName  string
+	Link       string
+	fs         *SDDP
+	Attributes SDDP_InodeAttributes
 	KnownSize  *uint64
 	AttrTime   time.Time
 
 	mu sync.Mutex // everything below is protected by mu
 
-	Parent *Inode
+	Parent *SDDP_Inode
 
-	dir *DirInodeData
+	dir *SDDP_DirInodeData
 
 	Invalid     bool
 	ImplicitDir bool
@@ -66,9 +69,9 @@ type Inode struct {
 	refcnt uint64
 }
 
-func NewInode(fs *Goofys, parent *Inode, name *string, fullName *string) (inode *Inode) {
-	fmt.Println("handles.go/NewInode called")
-	inode = &Inode{
+func SDDP_NewInode(fs *SDDP, parent *SDDP_Inode, name *string, fullName *string) (inode *SDDP_Inode) {
+	fmt.Println("sddp_handles.go/SDDP_NewInode called")
+	inode = &SDDP_Inode{
 		Name:       name,
 		fs:         fs,
 		AttrTime:   time.Now(),
@@ -80,7 +83,7 @@ func NewInode(fs *Goofys, parent *Inode, name *string, fullName *string) (inode 
 	return
 }
 
-func (inode *Inode) FullName() *string {
+func (inode *SDDP_Inode) FullName() *string {
 	if inode.Parent == nil {
 		return inode.Name
 	} else {
@@ -89,11 +92,11 @@ func (inode *Inode) FullName() *string {
 	}
 }
 
-func (inode *Inode) touch() {
+func (inode *SDDP_Inode) touch() {
 	inode.Attributes.Mtime = time.Now()
 }
 
-func (inode *Inode) InflateAttributes() (attr fuseops.InodeAttributes) {
+func (inode *SDDP_Inode) InflateAttributes() (attr fuseops.InodeAttributes) {
 	mtime := inode.Attributes.Mtime
 	if mtime.IsZero() {
 		mtime = inode.fs.rootAttrs.Mtime
@@ -119,26 +122,26 @@ func (inode *Inode) InflateAttributes() (attr fuseops.InodeAttributes) {
 	return
 }
 
-func (inode *Inode) logFuse(op string, args ...interface{}) {
+func (inode *SDDP_Inode) logFuse(op string, args ...interface{}) {
 	if fuseLog.Level >= logrus.DebugLevel {
 		fuseLog.Debugln(op, inode.Id, *inode.FullName(), args)
 	}
 }
 
-func (inode *Inode) errFuse(op string, args ...interface{}) {
+func (inode *SDDP_Inode) errFuse(op string, args ...interface{}) {
 	fuseLog.Errorln(op, inode.Id, *inode.FullName(), args)
 }
 
-func (inode *Inode) ToDir() {
-	inode.Attributes = InodeAttributes{
+func (inode *SDDP_Inode) ToDir() {
+	inode.Attributes = SDDP_InodeAttributes{
 		Size: 4096,
 		// Mtime intentionally not initialized
 	}
-	inode.dir = &DirInodeData{}
+	inode.dir = &SDDP_DirInodeData{}
 	inode.KnownSize = &inode.fs.rootAttrs.Size
 }
 
-func (parent *Inode) findChild(name string) (inode *Inode) {
+func (parent *SDDP_Inode) findChild(name string) (inode *SDDP_Inode) {
 	parent.mu.Lock()
 	defer parent.mu.Unlock()
 
@@ -146,7 +149,7 @@ func (parent *Inode) findChild(name string) (inode *Inode) {
 	return
 }
 
-func (parent *Inode) findInodeFunc(name string, isDir bool) func(i int) bool {
+func (parent *SDDP_Inode) findInodeFunc(name string, isDir bool) func(i int) bool {
 	// sort dirs first, then by name
 	return func(i int) bool {
 		if parent.dir.Children[i].isDir() != isDir {
@@ -156,7 +159,7 @@ func (parent *Inode) findInodeFunc(name string, isDir bool) func(i int) bool {
 	}
 }
 
-func (parent *Inode) findChildUnlockedFull(name string) (inode *Inode) {
+func (parent *SDDP_Inode) findChildUnlockedFull(name string) (inode *SDDP_Inode) {
 	inode = parent.findChildUnlocked(name, false)
 	if inode == nil {
 		inode = parent.findChildUnlocked(name, true)
@@ -164,7 +167,7 @@ func (parent *Inode) findChildUnlockedFull(name string) (inode *Inode) {
 	return
 }
 
-func (parent *Inode) findChildUnlocked(name string, isDir bool) (inode *Inode) {
+func (parent *SDDP_Inode) findChildUnlocked(name string, isDir bool) (inode *SDDP_Inode) {
 	l := len(parent.dir.Children)
 	if l == 0 {
 		return
@@ -179,7 +182,7 @@ func (parent *Inode) findChildUnlocked(name string, isDir bool) (inode *Inode) {
 	return
 }
 
-func (parent *Inode) findChildIdxUnlocked(name string) int {
+func (parent *SDDP_Inode) findChildIdxUnlocked(name string) int {
 	l := len(parent.dir.Children)
 	if l == 0 {
 		return -1
@@ -194,7 +197,7 @@ func (parent *Inode) findChildIdxUnlocked(name string) int {
 	return -1
 }
 
-func (parent *Inode) removeChildUnlocked(inode *Inode) {
+func (parent *SDDP_Inode) removeChildUnlocked(inode *SDDP_Inode) {
 	l := len(parent.dir.Children)
 	if l == 0 {
 		return
@@ -210,13 +213,13 @@ func (parent *Inode) removeChildUnlocked(inode *Inode) {
 	parent.dir.Children = parent.dir.Children[:l-1]
 
 	if cap(parent.dir.Children)-len(parent.dir.Children) > 20 {
-		tmp := make([]*Inode, len(parent.dir.Children))
+		tmp := make([]*SDDP_Inode, len(parent.dir.Children))
 		copy(tmp, parent.dir.Children)
 		parent.dir.Children = tmp
 	}
 }
 
-func (parent *Inode) removeChild(inode *Inode) {
+func (parent *SDDP_Inode) removeChild(inode *SDDP_Inode) {
 	parent.mu.Lock()
 	defer parent.mu.Unlock()
 
@@ -224,17 +227,17 @@ func (parent *Inode) removeChild(inode *Inode) {
 	return
 }
 
-func (parent *Inode) insertChild(inode *Inode) {
+func (parent *SDDP_Inode) insertChild(inode *SDDP_Inode) {
 	parent.mu.Lock()
 	defer parent.mu.Unlock()
 
 	parent.insertChildUnlocked(inode)
 }
 
-func (parent *Inode) insertChildUnlocked(inode *Inode) {
+func (parent *SDDP_Inode) insertChildUnlocked(inode *SDDP_Inode) {
 	l := len(parent.dir.Children)
 	if l == 0 {
-		parent.dir.Children = []*Inode{inode}
+		parent.dir.Children = []*SDDP_Inode{inode}
 		return
 	}
 
@@ -253,19 +256,7 @@ func (parent *Inode) insertChildUnlocked(inode *Inode) {
 	}
 }
 
-func (parent *Inode) LookUp(name string) (inode *Inode, err error) {
-	fmt.Println("handles.go/LookUp called")
-	parent.logFuse("Inode.LookUp", name)
-
-	inode, err = parent.LookUpInodeMaybeDir(name, parent.getChildName(name))
-	if err != nil {
-		return nil, err
-	}
-
-	return
-}
-
-func (parent *Inode) getChildName(name string) string {
+func (parent *SDDP_Inode) getChildName(name string) string {
 	if parent.Id == fuseops.RootInodeID {
 		return name
 	} else {
@@ -277,7 +268,7 @@ func (parent *Inode) getChildName(name string) string {
 // XXX why did I put lock required? This used to return a resurrect bool
 // which no long does anything, need to look into that to see if
 // that was legacy
-func (inode *Inode) Ref() {
+func (inode *SDDP_Inode) Ref() {
 	inode.logFuse("Ref", inode.refcnt)
 
 	inode.refcnt++
@@ -285,7 +276,7 @@ func (inode *Inode) Ref() {
 }
 
 // LOCKS_REQUIRED(fs.mu)
-func (inode *Inode) DeRef(n uint64) (stale bool) {
+func (inode *SDDP_Inode) DeRef(n uint64) (stale bool) {
 	inode.logFuse("DeRef", n, inode.refcnt)
 
 	if inode.refcnt < n {
@@ -298,7 +289,7 @@ func (inode *Inode) DeRef(n uint64) (stale bool) {
 	return
 }
 
-func (parent *Inode) Unlink(name string) (err error) {
+func (parent *SDDP_Inode) Unlink(name string) (err error) {
 	parent.logFuse("Unlink", name)
 
 	fullName := parent.getChildName(name)
@@ -327,8 +318,8 @@ func (parent *Inode) Unlink(name string) (err error) {
 	return
 }
 
-func (parent *Inode) Create(name string) (inode *Inode, fh *FileHandle) {
-	fmt.Println("handles.go/Create called")
+func (parent *SDDP_Inode) Create(name string) (inode *SDDP_Inode, fh *SDDP_FileHandle) {
+	fmt.Println("sddp_handles.go/Create called")
 	parent.logFuse("Create", name)
 	fullName := parent.getChildName(name)
 	fs := parent.fs
@@ -337,13 +328,13 @@ func (parent *Inode) Create(name string) (inode *Inode, fh *FileHandle) {
 	defer parent.mu.Unlock()
 
 	now := time.Now()
-	inode = NewInode(fs, parent, &name, &fullName)
-	inode.Attributes = InodeAttributes{
+	inode = SDDP_NewInode(fs, parent, &name, &fullName)
+	inode.Attributes = SDDP_InodeAttributes{
 		Size:  0,
 		Mtime: now,
 	}
 
-	fh = NewFileHandle(inode)
+	fh = SDDP_NewFileHandle(inode)
 	fh.poolHandle = fs.bufferPool
 	fh.buf = MBuf{}.Init(fh.poolHandle, 0, true)
 	fh.dirty = true
@@ -354,8 +345,8 @@ func (parent *Inode) Create(name string) (inode *Inode, fh *FileHandle) {
 	return
 }
 
-func (parent *Inode) MkDir(name string) (inode *Inode, err error) {
-	fmt.Println("handles.go/MkDir called")
+func (parent *SDDP_Inode) MkDir(name string) (inode *SDDP_Inode, err error) {
+	fmt.Println("sddp_handles.go/MkDir called")
 	parent.logFuse("MkDir", name)
 
 	fullName := parent.getChildName(name)
@@ -383,7 +374,7 @@ func (parent *Inode) MkDir(name string) (inode *Inode, err error) {
 	parent.mu.Lock()
 	defer parent.mu.Unlock()
 
-	inode = NewInode(fs, parent, &name, &fullName)
+	inode = SDDP_NewInode(fs, parent, &name, &fullName)
 	inode.ToDir()
 	inode.touch()
 	if parent.Attributes.Mtime.Before(inode.Attributes.Mtime) {
@@ -393,7 +384,7 @@ func (parent *Inode) MkDir(name string) (inode *Inode, err error) {
 	return
 }
 
-func isEmptyDir(fs *Goofys, fullName string) (isDir bool, err error) {
+func SDDP_isEmptyDir(fs *SDDP, fullName string) (isDir bool, err error) {
 	fullName += "/"
 
 	params := &s3.ListObjectsInput{
@@ -425,13 +416,13 @@ func isEmptyDir(fs *Goofys, fullName string) (isDir bool, err error) {
 	return
 }
 
-func (parent *Inode) RmDir(name string) (err error) {
+func (parent *SDDP_Inode) RmDir(name string) (err error) {
 	parent.logFuse("Rmdir", name)
 
 	fullName := parent.getChildName(name)
 	fs := parent.fs
 
-	isDir, err := isEmptyDir(fs, fullName)
+	isDir, err := SDDP_isEmptyDir(fs, fullName)
 	if err != nil {
 		return
 	}
@@ -464,7 +455,7 @@ func (parent *Inode) RmDir(name string) (err error) {
 	return
 }
 
-func (inode *Inode) GetAttributes() (*fuseops.InodeAttributes, error) {
+func (inode *SDDP_Inode) GetAttributes() (*fuseops.InodeAttributes, error) {
 	// XXX refresh attributes
 	inode.logFuse("GetAttributes")
 	if inode.Invalid {
@@ -474,12 +465,13 @@ func (inode *Inode) GetAttributes() (*fuseops.InodeAttributes, error) {
 	return &attr, nil
 }
 
-func (inode *Inode) isDir() bool {
+func (inode *SDDP_Inode) isDir() bool {
 	return inode.dir != nil
 }
 
 // LOCKS_REQUIRED(inode.mu)
-func (inode *Inode) fillXattrFromHead(resp *s3.HeadObjectOutput) {
+func (inode *SDDP_Inode) fillXattrFromHead(resp *s3.HeadObjectOutput) {
+	fmt.Println("sddp_handles.go/fillXattrFromHead called")
 	inode.userMetadata = make(map[string][]byte)
 
 	if resp.ETag != nil {
@@ -502,7 +494,8 @@ func (inode *Inode) fillXattrFromHead(resp *s3.HeadObjectOutput) {
 }
 
 // LOCKS_REQUIRED(inode.mu)
-func (inode *Inode) fillXattr() (err error) {
+func (inode *SDDP_Inode) fillXattr() (err error) {
+	fmt.Println("sddp_handles.go/fillXattr called")
 	if !inode.ImplicitDir && inode.userMetadata == nil {
 
 		fullName := *inode.FullName()
@@ -511,7 +504,10 @@ func (inode *Inode) fillXattr() (err error) {
 		}
 		fs := inode.fs
 
-		params := &s3.HeadObjectInput{Bucket: &fs.bucket, Key: fs.key(fullName)}
+		params := &s3.HeadObjectInput{
+			Bucket: &fs.bucket,
+			Key:    fs.key(fullName),
+		}
 		resp, err := fs.s3.HeadObject(params)
 		if err != nil {
 			err = mapAwsError(err)
@@ -531,7 +527,7 @@ func (inode *Inode) fillXattr() (err error) {
 }
 
 // LOCKS_REQUIRED(inode.mu)
-func (inode *Inode) getXattrMap(name string, userOnly bool) (
+func (inode *SDDP_Inode) getXattrMap(name string, userOnly bool) (
 	meta map[string][]byte, newName string, err error) {
 
 	if strings.HasPrefix(name, "s3.") {
@@ -564,7 +560,7 @@ func (inode *Inode) getXattrMap(name string, userOnly bool) (
 	return
 }
 
-func convertMetadata(meta map[string][]byte) (metadata map[string]*string) {
+func SDDP_convertMetadata(meta map[string][]byte) (metadata map[string]*string) {
 	metadata = make(map[string]*string)
 	for k, v := range meta {
 		metadata[k] = aws.String(xattrEscape(v))
@@ -573,14 +569,14 @@ func convertMetadata(meta map[string][]byte) (metadata map[string]*string) {
 }
 
 // LOCKS_REQUIRED(inode.mu)
-func (inode *Inode) updateXattr() (err error) {
-	err = copyObjectMaybeMultipart(inode.fs, int64(inode.Attributes.Size),
+func (inode *SDDP_Inode) updateXattr() (err error) {
+	err = SDDP_copyObjectMaybeMultipart(inode.fs, int64(inode.Attributes.Size),
 		*inode.FullName(), *inode.FullName(),
 		aws.String(string(inode.s3Metadata["etag"])), convertMetadata(inode.userMetadata))
 	return
 }
 
-func (inode *Inode) SetXattr(name string, value []byte, flags uint32) error {
+func (inode *SDDP_Inode) SetXattr(name string, value []byte, flags uint32) error {
 	inode.logFuse("RemoveXattr", name)
 
 	inode.mu.Lock()
@@ -609,7 +605,7 @@ func (inode *Inode) SetXattr(name string, value []byte, flags uint32) error {
 	return err
 }
 
-func (inode *Inode) RemoveXattr(name string) error {
+func (inode *SDDP_Inode) RemoveXattr(name string) error {
 	inode.logFuse("RemoveXattr", name)
 
 	inode.mu.Lock()
@@ -629,7 +625,7 @@ func (inode *Inode) RemoveXattr(name string) error {
 	}
 }
 
-func (inode *Inode) GetXattr(name string) ([]byte, error) {
+func (inode *SDDP_Inode) GetXattr(name string) ([]byte, error) {
 	inode.logFuse("GetXattr", name)
 
 	inode.mu.Lock()
@@ -648,7 +644,8 @@ func (inode *Inode) GetXattr(name string) ([]byte, error) {
 	}
 }
 
-func (inode *Inode) ListXattr() ([]string, error) {
+func (inode *SDDP_Inode) ListXattr() ([]string, error) {
+	fmt.Println("sddp_handles.go/ListXattr called")
 	inode.logFuse("ListXattr")
 
 	inode.mu.Lock()
@@ -672,19 +669,19 @@ func (inode *Inode) ListXattr() ([]string, error) {
 	return xattrs, nil
 }
 
-func (inode *Inode) OpenFile() (fh *FileHandle, err error) {
-	fmt.Println("handles.go/OpenFile called")
+func (inode *SDDP_Inode) OpenFile() (fh *SDDP_FileHandle, err error) {
+	fmt.Println("sddp_handles.go/OpenFile called")
 	inode.logFuse("OpenFile")
 
 	inode.mu.Lock()
 	defer inode.mu.Unlock()
 
-	fh = NewFileHandle(inode)
+	fh = SDDP_NewFileHandle(inode)
 	inode.fileHandles += 1
 	return
 }
 
-func (parent *Inode) Rename(from string, newParent *Inode, to string) (err error) {
+func (parent *SDDP_Inode) Rename(from string, newParent *SDDP_Inode, to string) (err error) {
 	parent.logFuse("Rename", from, newParent.getChildName(to))
 
 	fromFullName := parent.getChildName(from)
@@ -694,7 +691,7 @@ func (parent *Inode) Rename(from string, newParent *Inode, to string) (err error
 	var fromIsDir bool
 	var toIsDir bool
 
-	fromIsDir, err = isEmptyDir(fs, fromFullName)
+	fromIsDir, err = SDDP_isEmptyDir(fs, fromFullName)
 	if err != nil {
 		// we don't support renaming a directory that's not empty
 		return
@@ -702,7 +699,7 @@ func (parent *Inode) Rename(from string, newParent *Inode, to string) (err error
 
 	toFullName := newParent.getChildName(to)
 
-	toIsDir, err = isEmptyDir(fs, toFullName)
+	toIsDir, err = SDDP_isEmptyDir(fs, toFullName)
 	if err != nil {
 		return
 	}
@@ -731,11 +728,11 @@ func (parent *Inode) Rename(from string, newParent *Inode, to string) (err error
 		size = 0
 	}
 
-	err = renameObject(fs, size, fromFullName, toFullName)
+	err = SDDP_renameObject(fs, size, fromFullName, toFullName)
 	return
 }
 
-func mpuCopyPart(fs *Goofys, from string, to string, mpuId string, bytes string, part int64,
+func SDDP_mpuCopyPart(fs *SDDP, from string, to string, mpuId string, bytes string, part int64,
 	wg *sync.WaitGroup, srcEtag *string, etag **string, errout *error) {
 
 	defer func() {
@@ -767,7 +764,7 @@ func mpuCopyPart(fs *Goofys, from string, to string, mpuId string, bytes string,
 	return
 }
 
-func sizeToParts(size int64) int {
+func SDDP_sizeToParts(size int64) int {
 	const PART_SIZE = 5 * 1024 * 1024 * 1024
 
 	nParts := int(size / PART_SIZE)
@@ -777,7 +774,7 @@ func sizeToParts(size int64) int {
 	return nParts
 }
 
-func mpuCopyParts(fs *Goofys, size int64, from string, to string, mpuId string,
+func SDDP_mpuCopyParts(fs *SDDP, size int64, from string, to string, mpuId string,
 	wg *sync.WaitGroup, srcEtag *string, etags []*string, err *error) {
 
 	const PART_SIZE = 5 * 1024 * 1024 * 1024
@@ -794,13 +791,13 @@ func mpuCopyParts(fs *Goofys, size int64, from string, to string, mpuId string,
 		bytes := fmt.Sprintf("bytes=%v-%v", rangeFrom, rangeTo-1)
 
 		wg.Add(1)
-		go mpuCopyPart(fs, from, to, mpuId, bytes, i, wg, srcEtag, &etags[i-1], err)
+		go SDDP_mpuCopyPart(fs, from, to, mpuId, bytes, i, wg, srcEtag, &etags[i-1], err)
 	}
 }
 
-func copyObjectMultipart(fs *Goofys, size int64, from string, to string, mpuId string,
+func SDDP_copyObjectMultipart(fs *SDDP, size int64, from string, to string, mpuId string,
 	srcEtag *string, metadata map[string]*string) (err error) {
-	fmt.Println("handles.go/copyObjectMultipart called")
+	fmt.Println("sddp_handles.go/copyObjectMultipart called")
 	var wg sync.WaitGroup
 	nParts := sizeToParts(size)
 	etags := make([]*string, nParts)
@@ -833,7 +830,7 @@ func copyObjectMultipart(fs *Goofys, size int64, from string, to string, mpuId s
 		mpuId = *resp.UploadId
 	}
 
-	mpuCopyParts(fs, size, from, to, mpuId, &wg, srcEtag, etags, &err)
+	SDDP_mpuCopyParts(fs, size, from, to, mpuId, &wg, srcEtag, etags, &err)
 	wg.Wait()
 
 	if err != nil {
@@ -868,10 +865,13 @@ func copyObjectMultipart(fs *Goofys, size int64, from string, to string, mpuId s
 	return
 }
 
-func copyObjectMaybeMultipart(fs *Goofys, size int64, from string, to string, srcEtag *string, metadata map[string]*string) (err error) {
-	fmt.Println("handles.go/copyObjectMaybeMultipart called")
+func SDDP_copyObjectMaybeMultipart(fs *SDDP, size int64, from string, to string, srcEtag *string, metadata map[string]*string) (err error) {
+	fmt.Println("sddp_handles.go/copyObjectMaybeMultipart called")
 	if size == -1 || srcEtag == nil || metadata == nil {
-		params := &s3.HeadObjectInput{Bucket: &fs.bucket, Key: fs.key(from)}
+		params := &s3.HeadObjectInput{
+			Bucket: &fs.bucket,
+			Key:    fs.key(from),
+		}
 		resp, err := fs.s3.HeadObject(params)
 		if err != nil {
 			return mapAwsError(err)
@@ -885,7 +885,7 @@ func copyObjectMaybeMultipart(fs *Goofys, size int64, from string, to string, sr
 	from = fs.bucket + "/" + *fs.key(from)
 
 	if size > 5*1024*1024*1024 {
-		return copyObjectMultipart(fs, size, from, to, "", srcEtag, metadata)
+		return SDDP_copyObjectMultipart(fs, size, from, to, "", srcEtag, metadata)
 	}
 
 	storageClass := fs.flags.StorageClass
@@ -926,8 +926,8 @@ func copyObjectMaybeMultipart(fs *Goofys, size int64, from string, to string, sr
 	return
 }
 
-func renameObject(fs *Goofys, size int64, fromFullName string, toFullName string) (err error) {
-	err = copyObjectMaybeMultipart(fs, size, fromFullName, toFullName, nil, nil)
+func SDDP_renameObject(fs *SDDP, size int64, fromFullName string, toFullName string) (err error) {
+	err = SDDP_copyObjectMaybeMultipart(fs, size, fromFullName, toFullName, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -946,10 +946,10 @@ func renameObject(fs *Goofys, size int64, fromFullName string, toFullName string
 	return
 }
 
-func (parent *Inode) addDotAndDotDot() {
-	fmt.Println("handles.go/addDotAndDotDot called")
+func (parent *SDDP_Inode) addDotAndDotDot() {
+	fmt.Println("sddp_handles.go/addDotAndDotDot called")
 	fs := parent.fs
-	en := &DirHandleEntry{
+	en := &SDDP_DirHandleEntry{
 		Name:       aws.String("."),
 		Type:       fuseutil.DT_Directory,
 		Attributes: &parent.Attributes,
@@ -960,7 +960,7 @@ func (parent *Inode) addDotAndDotDot() {
 	if parent.Parent != nil {
 		dotDotAttr = &parent.Parent.Attributes
 	}
-	en = &DirHandleEntry{
+	en = &SDDP_DirHandleEntry{
 		Name:       aws.String(".."),
 		Type:       fuseutil.DT_Directory,
 		Attributes: dotDotAttr,
@@ -971,11 +971,11 @@ func (parent *Inode) addDotAndDotDot() {
 
 // if I had seen a/ and a/b, and now I get a/c, that means a/b is
 // done, but not a/
-func (parent *Inode) isParentOf(inode *Inode) bool {
+func (parent *SDDP_Inode) isParentOf(inode *SDDP_Inode) bool {
 	return inode.Parent != nil && (parent == inode.Parent || parent.isParentOf(inode.Parent))
 }
 
-func sealPastDirs(dirs map[*Inode]bool, d *Inode) {
+func SDDP_sealPastDirs(dirs map[*SDDP_Inode]bool, d *SDDP_Inode) {
 	for p, sealed := range dirs {
 		if p != d && !sealed && !p.isParentOf(d) {
 			dirs[p] = true
@@ -985,25 +985,25 @@ func sealPastDirs(dirs map[*Inode]bool, d *Inode) {
 	dirs[d] = false
 }
 
-func (parent *Inode) insertSubTree(path string, obj *s3.Object, dirs map[*Inode]bool) {
-	fmt.Println("handles.go/insertSubTree called")
+func (parent *SDDP_Inode) insertSubTree(path string, obj *s3.Object, dirs map[*SDDP_Inode]bool) {
+	fmt.Println("sddp_handles.go/insertSubTree called")
 	fs := parent.fs
 	slash := strings.Index(path, "/")
 	if slash == -1 {
-		fs.insertInodeFromDirEntry(parent, objectToDirEntry(fs, obj, path, false))
-		sealPastDirs(dirs, parent)
+		fs.insertInodeFromDirEntry(parent, SDDP_objectToDirEntry(fs, obj, path, false))
+		SDDP_sealPastDirs(dirs, parent)
 	} else {
 		dir := path[:slash]
 		path = path[slash+1:]
 
 		if len(path) == 0 {
-			inode := fs.insertInodeFromDirEntry(parent, objectToDirEntry(fs, obj, dir, true))
+			inode := fs.insertInodeFromDirEntry(parent, SDDP_objectToDirEntry(fs, obj, dir, true))
 			inode.addDotAndDotDot()
 
-			sealPastDirs(dirs, inode)
+			SDDP_sealPastDirs(dirs, inode)
 		} else {
 			// ensure that the potentially implicit dir is added
-			en := &DirHandleEntry{
+			en := &SDDP_DirHandleEntry{
 				Name:       &dir,
 				Type:       fuseutil.DT_Directory,
 				Attributes: &fs.rootAttrs,
@@ -1020,7 +1020,7 @@ func (parent *Inode) insertSubTree(path string, obj *s3.Object, dirs map[*Inode]
 	}
 }
 
-func (parent *Inode) findChildMaxTime() time.Time {
+func (parent *SDDP_Inode) findChildMaxTime() time.Time {
 	maxTime := parent.Attributes.Mtime
 
 	for i, c := range parent.dir.Children {
@@ -1036,8 +1036,8 @@ func (parent *Inode) findChildMaxTime() time.Time {
 	return maxTime
 }
 
-func (parent *Inode) readDirFromCache(offset fuseops.DirOffset) (en *DirHandleEntry, ok bool) {
-	fmt.Println("handles.go/readDirFromCache called")
+func (parent *SDDP_Inode) readDirFromCache(offset fuseops.DirOffset) (en *SDDP_DirHandleEntry, ok bool) {
+	fmt.Println("sddp_handles.go/readDirFromCache called")
 	parent.mu.Lock()
 	defer parent.mu.Unlock()
 
@@ -1049,7 +1049,7 @@ func (parent *Inode) readDirFromCache(offset fuseops.DirOffset) (en *DirHandleEn
 		}
 		child := parent.dir.Children[offset]
 
-		en = &DirHandleEntry{
+		en = &SDDP_DirHandleEntry{
 			Name:       child.Name,
 			Inode:      child.Id,
 			Offset:     offset + 1,
@@ -1065,9 +1065,12 @@ func (parent *Inode) readDirFromCache(offset fuseops.DirOffset) (en *DirHandleEn
 	return
 }
 
-func (parent *Inode) LookUpInodeNotDir(name string, c chan s3.HeadObjectOutput, errc chan error) {
-	fmt.Println("handles.go/LookUpInodeNotDir called")
-	params := &s3.HeadObjectInput{Bucket: &parent.fs.bucket, Key: parent.fs.key(name)}
+func (parent *SDDP_Inode) LookUpInodeNotDir(name string, c chan s3.HeadObjectOutput, errc chan error) {
+	fmt.Println("sddp_handles.go/LookUpInodeNotDir called")
+	params := &s3.HeadObjectInput{
+		Bucket: &parent.fs.bucket,
+		Key:    parent.fs.key(name),
+	}
 	resp, err := parent.fs.s3.HeadObject(params)
 	if err != nil {
 		errc <- mapAwsError(err)
@@ -1078,8 +1081,8 @@ func (parent *Inode) LookUpInodeNotDir(name string, c chan s3.HeadObjectOutput, 
 	c <- *resp
 }
 
-func (parent *Inode) LookUpInodeDir(name string, c chan s3.ListObjectsOutput, errc chan error) {
-	fmt.Println("handles.go/LookUpInodeDir called")
+func (parent *SDDP_Inode) LookUpInodeDir(name string, c chan s3.ListObjectsOutput, errc chan error) {
+	fmt.Println("sddp_handles.go/LookUpInodeDir called")
 	params := &s3.ListObjectsInput{
 		Bucket:    &parent.fs.bucket,
 		Delimiter: aws.String("/"),
@@ -1095,127 +1098,4 @@ func (parent *Inode) LookUpInodeDir(name string, c chan s3.ListObjectsOutput, er
 
 	s3Log.Debug(resp)
 	c <- *resp
-}
-
-// returned inode has nil Id
-func (parent *Inode) LookUpInodeMaybeDir(name string, fullName string) (inode *Inode, err error) {
-	fmt.Println("handles.go/LookUpInodeMaybeDir called")
-	errObjectChan := make(chan error, 1)
-	objectChan := make(chan s3.HeadObjectOutput, 1)
-	errDirBlobChan := make(chan error, 1)
-	dirBlobChan := make(chan s3.HeadObjectOutput, 1)
-	var errDirChan chan error
-	var dirChan chan s3.ListObjectsOutput
-
-	checking := 3
-	var checkErr [3]error
-
-	if parent.fs.s3 == nil {
-		panic("s3 disabled")
-	}
-
-	go parent.LookUpInodeNotDir(fullName, objectChan, errObjectChan)
-	if !parent.fs.flags.Cheap {
-		go parent.LookUpInodeNotDir(fullName+"/", dirBlobChan, errDirBlobChan)
-		if !parent.fs.flags.ExplicitDir {
-			errDirChan = make(chan error, 1)
-			dirChan = make(chan s3.ListObjectsOutput, 1)
-			go parent.LookUpInodeDir(fullName, dirChan, errDirChan)
-		}
-	}
-
-	for {
-		select {
-		case resp := <-objectChan:
-			err = nil
-			// XXX/TODO if both object and object/ exists, return dir
-			inode = NewInode(parent.fs, parent, &name, &fullName)
-			inode.Attributes = InodeAttributes{
-				Size:  uint64(aws.Int64Value(resp.ContentLength)),
-				Mtime: *resp.LastModified,
-			}
-
-			// don't want to point to the attribute because that
-			// can get updated
-			size := inode.Attributes.Size
-			inode.KnownSize = &size
-
-			inode.fillXattrFromHead(&resp)
-			return
-		case err = <-errObjectChan:
-			checking--
-			checkErr[0] = err
-			s3Log.Debugf("HEAD %v = %v", fullName, err)
-		case resp := <-dirChan:
-			err = nil
-			if len(resp.CommonPrefixes) != 0 || len(resp.Contents) != 0 {
-				inode = NewInode(parent.fs, parent, &name, &fullName)
-				inode.ToDir()
-				if len(resp.Contents) != 0 && *resp.Contents[0].Key == name+"/" {
-					// it's actually a dir blob
-					entry := resp.Contents[0]
-					if entry.ETag != nil {
-						inode.s3Metadata["etag"] = []byte(*entry.ETag)
-					}
-					if entry.StorageClass != nil {
-						inode.s3Metadata["storage-class"] = []byte(*entry.StorageClass)
-					}
-
-				}
-				// if cheap is not on, the dir blob
-				// could exist but this returned first
-				if inode.fs.flags.Cheap {
-					inode.ImplicitDir = true
-				}
-				return
-			} else {
-				checkErr[2] = fuse.ENOENT
-				checking--
-			}
-		case err = <-errDirChan:
-			checking--
-			checkErr[2] = err
-			s3Log.Debugf("LIST %v/ = %v", fullName, err)
-		case resp := <-dirBlobChan:
-			err = nil
-			inode = NewInode(parent.fs, parent, &name, &fullName)
-			inode.ToDir()
-			inode.Attributes.Mtime = *resp.LastModified
-			inode.fillXattrFromHead(&resp)
-			return
-		case err = <-errDirBlobChan:
-			checking--
-			checkErr[1] = err
-			s3Log.Debugf("HEAD %v/ = %v", fullName, err)
-		}
-
-		switch checking {
-		case 2:
-			if parent.fs.flags.Cheap {
-				go parent.LookUpInodeNotDir(fullName+"/", dirBlobChan, errDirBlobChan)
-			}
-		case 1:
-			if parent.fs.flags.ExplicitDir {
-				checkErr[2] = fuse.ENOENT
-				goto doneCase
-			} else if parent.fs.flags.Cheap {
-				errDirChan = make(chan error, 1)
-				dirChan = make(chan s3.ListObjectsOutput, 1)
-				go parent.LookUpInodeDir(fullName, dirChan, errDirChan)
-			}
-			break
-		doneCase:
-			fallthrough
-		case 0:
-			for _, e := range checkErr {
-				if e != fuse.ENOENT {
-					err = e
-					return
-				}
-			}
-
-			err = fuse.ENOENT
-			return
-		}
-	}
 }

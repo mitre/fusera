@@ -16,7 +16,6 @@ package internal
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -29,43 +28,43 @@ import (
 	"github.com/jacobsa/fuse/fuseutil"
 )
 
-type DirInodeData struct {
+type SDDP_DirInodeData struct {
 	// these 2 refer to readdir of the Children
 	lastOpenDir     *string
 	lastOpenDirIdx  int
 	seqOpenDirScore uint8
 	DirTime         time.Time
 
-	Children []*Inode
+	Children []*SDDP_Inode
 }
 
-type DirHandleEntry struct {
+type SDDP_DirHandleEntry struct {
 	Name   *string
 	Inode  fuseops.InodeID
 	Type   fuseutil.DirentType
 	Offset fuseops.DirOffset
 
-	Attributes   *InodeAttributes
+	Attributes   *SDDP_InodeAttributes
 	ETag         *string
 	StorageClass *string
 }
 
-type DirHandle struct {
-	inode *Inode
+type SDDP_DirHandle struct {
+	inode *SDDP_Inode
 
 	mu         sync.Mutex // everything below is protected by mu
-	Entries    []*DirHandleEntry
+	Entries    []*SDDP_DirHandleEntry
 	Marker     *string
 	BaseOffset int
 }
 
-func NewDirHandle(inode *Inode) (dh *DirHandle) {
-	dh = &DirHandle{inode: inode}
+func SDDP_NewDirHandle(inode *SDDP_Inode) (dh *SDDP_DirHandle) {
+	dh = &SDDP_DirHandle{inode: inode}
 	return
 }
 
-func (inode *Inode) OpenDir() (dh *DirHandle) {
-	fmt.Println("dir.go/OpenDir called")
+func (inode *SDDP_Inode) OpenDir() (dh *SDDP_DirHandle) {
+	fmt.Println("sddp_dir.go/OpenDir called")
 	inode.logFuse("OpenDir")
 
 	parent := inode.Parent
@@ -120,19 +119,19 @@ func (inode *Inode) OpenDir() (dh *DirHandle) {
 		}
 	}
 
-	dh = NewDirHandle(inode)
+	dh = SDDP_NewDirHandle(inode)
 	return
 }
 
 // Dirents, sorted by name.
-type sortedDirents []*DirHandleEntry
+type SDDP_sortedDirents []*SDDP_DirHandleEntry
 
-func (p sortedDirents) Len() int           { return len(p) }
-func (p sortedDirents) Less(i, j int) bool { return *p[i].Name < *p[j].Name }
-func (p sortedDirents) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+func (p SDDP_sortedDirents) Len() int           { return len(p) }
+func (p SDDP_sortedDirents) Less(i, j int) bool { return *p[i].Name < *p[j].Name }
+func (p SDDP_sortedDirents) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
-func (dh *DirHandle) listObjectsSlurp(prefix string) (resp *s3.ListObjectsOutput, err error) {
-	fmt.Println("dir.go/listObjectsSlurp called")
+func (dh *SDDP_DirHandle) listObjectsSlurp(prefix string) (resp *s3.ListObjectsOutput, err error) {
+	fmt.Println("sddp_dir.go/listObjectsSlurp called")
 	var marker *string
 	reqPrefix := prefix
 	inode := dh.inode
@@ -163,7 +162,7 @@ func (dh *DirHandle) listObjectsSlurp(prefix string) (resp *s3.ListObjectsOutput
 		return
 	}
 
-	dirs := make(map[*Inode]bool)
+	dirs := make(map[*SDDP_Inode]bool)
 	for _, obj := range resp.Contents {
 		baseName := (*obj.Key)[len(reqPrefix):]
 
@@ -214,8 +213,8 @@ func (dh *DirHandle) listObjectsSlurp(prefix string) (resp *s3.ListObjectsOutput
 	return
 }
 
-func (dh *DirHandle) listObjects(prefix string) (resp *s3.ListObjectsOutput, err error) {
-	fmt.Println("dir.go/listObjects called")
+func (dh *SDDP_DirHandle) listObjects(prefix string) (resp *s3.ListObjectsOutput, err error) {
+	fmt.Println("sddp_dir.go/listObjects called")
 	errSlurpChan := make(chan error, 1)
 	slurpChan := make(chan s3.ListObjectsOutput, 1)
 	errListChan := make(chan error, 1)
@@ -284,18 +283,18 @@ func (dh *DirHandle) listObjects(prefix string) (resp *s3.ListObjectsOutput, err
 	}
 }
 
-func objectToDirEntry(fs *Goofys, obj *s3.Object, name string, isDir bool) (en *DirHandleEntry) {
+func SDDP_objectToDirEntry(fs *SDDP, obj *s3.Object, name string, isDir bool) (en *SDDP_DirHandleEntry) {
 	if isDir {
-		en = &DirHandleEntry{
+		en = &SDDP_DirHandleEntry{
 			Name:       &name,
 			Type:       fuseutil.DT_Directory,
 			Attributes: &fs.rootAttrs,
 		}
 	} else {
-		en = &DirHandleEntry{
+		en = &SDDP_DirHandleEntry{
 			Name: &name,
 			Type: fuseutil.DT_File,
-			Attributes: &InodeAttributes{
+			Attributes: &SDDP_InodeAttributes{
 				Size:  uint64(*obj.Size),
 				Mtime: *obj.LastModified,
 			},
@@ -308,8 +307,8 @@ func objectToDirEntry(fs *Goofys, obj *s3.Object, name string, isDir bool) (en *
 }
 
 // LOCKS_REQUIRED(dh.mu)
-func (dh *DirHandle) ReadDir(offset fuseops.DirOffset) (en *DirHandleEntry, err error) {
-	fmt.Println("dir.go/ReadDir called")
+func (dh *SDDP_DirHandle) ReadDir(offset fuseops.DirOffset) (en *SDDP_DirHandleEntry, err error) {
+	fmt.Println("sddp_dir.go/ReadDir called")
 	// If the request is for offset zero, we assume that either this is the first
 	// call or rewinddir has been called. Reset state.
 	if offset == 0 {
@@ -324,7 +323,7 @@ func (dh *DirHandle) ReadDir(offset fuseops.DirOffset) (en *DirHandleEntry, err 
 	fs := dh.inode.fs
 
 	if offset == 0 {
-		en = &DirHandleEntry{
+		en = &SDDP_DirHandleEntry{
 			Name:       aws.String("."),
 			Type:       fuseutil.DT_Directory,
 			Attributes: &fs.rootAttrs,
@@ -332,7 +331,7 @@ func (dh *DirHandle) ReadDir(offset fuseops.DirOffset) (en *DirHandleEntry, err 
 		}
 		return
 	} else if offset == 1 {
-		en = &DirHandleEntry{
+		en = &SDDP_DirHandleEntry{
 			Name:       aws.String(".."),
 			Type:       fuseutil.DT_Directory,
 			Attributes: &fs.rootAttrs,
@@ -355,104 +354,11 @@ func (dh *DirHandle) ReadDir(offset fuseops.DirOffset) (en *DirHandleEntry, err 
 		}
 	}
 
-	if dh.Entries == nil {
-		// try not to hold the lock when we make the request
-		dh.mu.Unlock()
-
-		prefix := *fs.key(*dh.inode.FullName())
-		if len(*dh.inode.FullName()) != 0 {
-			prefix += "/"
-		}
-
-		resp, err := dh.listObjects(prefix)
-		if err != nil {
-			dh.mu.Lock()
-			return nil, mapAwsError(err)
-		}
-
-		s3Log.Debug(resp)
-		dh.mu.Lock()
-
-		dh.Entries = make([]*DirHandleEntry, 0, len(resp.CommonPrefixes)+len(resp.Contents))
-
-		// this is only returned for non-slurped responses
-		for _, dir := range resp.CommonPrefixes {
-			// strip trailing /
-			dirName := (*dir.Prefix)[0 : len(*dir.Prefix)-1]
-			// strip previous prefix
-			dirName = dirName[len(*resp.Prefix):]
-			if len(dirName) == 0 {
-				continue
-			}
-			en = &DirHandleEntry{
-				Name:       &dirName,
-				Type:       fuseutil.DT_Directory,
-				Attributes: &fs.rootAttrs,
-			}
-
-			dh.Entries = append(dh.Entries, en)
-		}
-
-		lastDir := ""
-		for _, obj := range resp.Contents {
-			if !strings.HasPrefix(*obj.Key, prefix) {
-				// other slurped objects that we cached
-				continue
-			}
-
-			baseName := (*obj.Key)[len(prefix):]
-
-			slash := strings.Index(baseName, "/")
-			if slash == -1 {
-				if len(baseName) == 0 {
-					// shouldn't happen
-					continue
-				}
-				dh.Entries = append(dh.Entries,
-					objectToDirEntry(fs, obj, baseName, false))
-			} else {
-				// this is a slurped up object which
-				// was already cached, unless it's a
-				// directory right under this dir that
-				// we need to return
-				dirName := baseName[:slash]
-				if dirName != lastDir && lastDir != "" {
-					// make a copy so we can take the address
-					dir := lastDir
-					en := &DirHandleEntry{
-						Name:       &dir,
-						Type:       fuseutil.DT_Directory,
-						Attributes: &fs.rootAttrs,
-					}
-					dh.Entries = append(dh.Entries, en)
-				}
-				lastDir = dirName
-			}
-		}
-		if lastDir != "" {
-			en := &DirHandleEntry{
-				Name:       &lastDir,
-				Type:       fuseutil.DT_Directory,
-				Attributes: &fs.rootAttrs,
-			}
-			dh.Entries = append(dh.Entries, en)
-		}
-
-		sort.Sort(sortedDirents(dh.Entries))
-
-		// Fix up offset fields.
-		for i := 0; i < len(dh.Entries); i++ {
-			en := dh.Entries[i]
-			// offset is 1 based, also need to account for "." and ".."
-			en.Offset = fuseops.DirOffset(i+dh.BaseOffset) + 1 + 2
-		}
-
-		if *resp.IsTruncated {
-			dh.Marker = resp.NextMarker
-		} else {
-			dh.Marker = nil
-		}
-	}
+	// if dh.Entries == nil {
+	// 	fmt.Println("sddp_dir.go/ReadDir:")
+	// 	fmt.Println("Trying to call out to s3 when reading the directory.")
+	// 	fmt.Println("Need to rewrite code to simply list the files the directory is supposed to contain.")
+	// }
 
 	if i == len(dh.Entries) {
 		// we've reached the end
@@ -464,6 +370,6 @@ func (dh *DirHandle) ReadDir(offset fuseops.DirOffset) (en *DirHandleEntry, err 
 	return dh.Entries[i], nil
 }
 
-func (dh *DirHandle) CloseDir() error {
+func (dh *SDDP_DirHandle) CloseDir() error {
 	return nil
 }

@@ -94,6 +94,23 @@ func NewApp() (app *cli.App) {
 			},
 
 			/////////////////////////
+			// SDDP
+			/////////////////////////
+
+			cli.StringFlag{
+				Name:  "ncg",
+				Usage: "path to an ncg file that contains authentication info.",
+			},
+			cli.StringSliceFlag{
+				Name:  "acc",
+				Usage: "comma separated list of SRR#'s that are to be mounted.",
+			},
+			cli.StringFlag{
+				Name:  "loc",
+				Usage: "preferred aws region. (optional and not guaranteed)",
+			},
+
+			/////////////////////////
 			// File system
 			/////////////////////////
 
@@ -207,13 +224,13 @@ func NewApp() (app *cli.App) {
 
 			cli.DurationFlag{
 				Name:  "stat-cache-ttl",
-				Value: time.Minute,
+				Value: time.Hour * 24 * 365 * 7,
 				Usage: "How long to cache StatObject results and inode attributes.",
 			},
 
 			cli.DurationFlag{
 				Name:  "type-cache-ttl",
-				Value: time.Minute,
+				Value: time.Hour * 24 * 365 * 7,
 				Usage: "How long to cache name -> file/dir mappings in directory " +
 					"inodes.",
 			},
@@ -268,6 +285,13 @@ func NewApp() (app *cli.App) {
 }
 
 type FlagStorage struct {
+	// SDDP flags
+	Ncg string
+	Acc []string
+	Loc string
+	// SRR# has a map of file names that map to urls where the data is
+	Urls map[string]map[string]string
+
 	// File system
 	MountOptions      map[string]string
 	MountPoint        string
@@ -340,6 +364,11 @@ func (flags *FlagStorage) Cleanup() {
 // variables into which the flags will parse.
 func PopulateFlags(c *cli.Context) (ret *FlagStorage) {
 	flags := &FlagStorage{
+		// SDDP
+		Ncg: c.String("ncg"),
+		Acc: c.StringSlice("acc"),
+		Loc: c.String("loc"),
+
 		// File system
 		MountOptions: make(map[string]string),
 		DirMode:      os.FileMode(c.Int("dir-mode")),
@@ -376,7 +405,7 @@ func PopulateFlags(c *cli.Context) (ret *FlagStorage) {
 		parseOptions(flags.MountOptions, o)
 	}
 
-	flags.MountPointArg = c.Args()[1]
+	flags.MountPointArg = c.Args()[0]
 	flags.MountPoint = flags.MountPointArg
 	var err error
 
