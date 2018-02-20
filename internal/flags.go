@@ -21,11 +21,14 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"os/user"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 	"text/template"
 	"time"
 
+	"github.com/mattrbianchi/twig"
 	"github.com/urfave/cli"
 )
 
@@ -46,7 +49,7 @@ func init() {
    {{.Name}} - {{.Usage}}
 
 USAGE:
-   {{.Name}} {{if .Flags}}[global options]{{end}} bucket[:prefix] mountpoint
+   {{.Name}} {{if .Flags}}[global options]{{end}} mountpoint
    {{if .Version}}
 VERSION:
    {{.Version}}
@@ -60,12 +63,6 @@ COMMANDS:
 GLOBAL OPTIONS:
    {{range category .Flags ""}}{{.}}
    {{end}}
-TUNING OPTIONS:
-   {{range category .Flags "tuning"}}{{.}}
-   {{end}}
-AWS S3 OPTIONS:
-   {{range category .Flags "aws"}}{{.}}
-   {{end}}
 MISC OPTIONS:
    {{range category .Flags "misc"}}{{.}}
    {{end}}{{end}}{{if .Copyright }}
@@ -78,12 +75,11 @@ COPYRIGHT:
 var VersionHash string
 
 func NewApp() (app *cli.App) {
-	uid, gid := MyUserAndGroup()
 
 	app = &cli.App{
-		Name:     "goofys",
-		Version:  "0.0.18-" + VersionHash,
-		Usage:    "Mount an S3 bucket locally",
+		Name:     "fusera",
+		Version:  "0.0.-" + VersionHash,
+		Usage:    "",
 		HideHelp: true,
 		Writer:   os.Stderr,
 		Flags: []cli.Flag{
@@ -94,7 +90,7 @@ func NewApp() (app *cli.App) {
 			},
 
 			/////////////////////////
-			// SDDP
+			// Fusera
 			/////////////////////////
 
 			cli.StringFlag{
@@ -107,151 +103,39 @@ func NewApp() (app *cli.App) {
 			},
 			cli.StringFlag{
 				Name:  "loc",
-				Usage: "preferred aws region. (optional and not guaranteed)",
+				Usage: "preferred region.",
 			},
 
 			/////////////////////////
 			// File system
 			/////////////////////////
 
-			cli.StringSliceFlag{
-				Name:  "o",
-				Usage: "Additional system-specific mount options. Be careful!",
-			},
-
-			cli.StringFlag{
-				Name: "cache",
-				Usage: "Directory to use for data cache. " +
-					"Requires catfs and `-o allow_other'. " +
-					"Can also pass in other catfs options " +
-					"(ex: --cache \"--free:10%:$HOME/cache\") (default: off)",
-			},
-
-			cli.IntFlag{
-				Name:  "dir-mode",
-				Value: 0755,
-				Usage: "Permission bits for directories. (default: 0755)",
-			},
-
-			cli.IntFlag{
-				Name:  "file-mode",
-				Value: 0644,
-				Usage: "Permission bits for files. (default: 0644)",
-			},
-
-			cli.IntFlag{
-				Name:  "uid",
-				Value: uid,
-				Usage: "UID owner of all inodes.",
-			},
-
-			cli.IntFlag{
-				Name:  "gid",
-				Value: gid,
-				Usage: "GID owner of all inodes.",
-			},
-
-			/////////////////////////
-			// S3
-			/////////////////////////
-
-			cli.StringFlag{
-				Name:  "endpoint",
-				Value: "",
-				Usage: "The non-AWS endpoint to connect to." +
-					" Possible values: http://127.0.0.1:8081/",
-			},
-
-			cli.StringFlag{
-				Name:  "region",
-				Value: "us-east-1",
-				Usage: "The region to connect to. Usually this is auto-detected." +
-					" Possible values: us-east-1, us-west-1, us-west-2, eu-west-1, " +
-					"eu-central-1, ap-southeast-1, ap-southeast-2, ap-northeast-1, " +
-					"sa-east-1, cn-north-1",
-			},
-
-			cli.StringFlag{
-				Name:  "storage-class",
-				Value: "STANDARD",
-				Usage: "The type of storage to use when writing objects." +
-					" Possible values: REDUCED_REDUNDANCY, STANDARD, STANDARD_IA.",
-			},
-
-			cli.StringFlag{
-				Name:  "profile",
-				Usage: "Use a named profile from $HOME/.aws/credentials instead of \"default\"",
-			},
-
-			cli.BoolFlag{
-				Name:  "use-content-type",
-				Usage: "Set Content-Type according to file extension and /etc/mime.types (default: off)",
-			},
-
-			/// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectPUT.html
-			/// See http://docs.aws.amazon.com/AmazonS3/latest/dev/UsingServerSideEncryption.html
-			cli.BoolFlag{
-				Name:  "sse",
-				Usage: "Enable basic server-side encryption at rest (SSE-S3) in S3 for all writes (default: off)",
-			},
-
-			cli.StringFlag{
-				Name:  "sse-kms",
-				Usage: "Enable KMS encryption (SSE-KMS) for all writes using this particular KMS `key-id`. Leave blank to Use the account's CMK - customer master key (default: off)",
-				Value: "",
-			},
-
-			/// http://docs.aws.amazon.com/AmazonS3/latest/dev/acl-overview.html#canned-acl
-			cli.StringFlag{
-				Name:  "acl",
-				Usage: "The canned ACL to apply to the object. Possible values: private, public-read, public-read-write, authenticated-read, aws-exec-read, bucket-owner-read, bucket-owner-full-control (default: off)",
-				Value: "",
-			},
-
-			/////////////////////////
-			// Tuning
-			/////////////////////////
-
-			cli.BoolFlag{
-				Name:  "cheap",
-				Usage: "Reduce S3 operation costs at the expense of some performance (default: off)",
-			},
-
-			cli.BoolFlag{
-				Name:  "no-implicit-dir",
-				Usage: "Assume all directory objects (\"dir/\") exist (default: off)",
-			},
-
-			cli.DurationFlag{
-				Name:  "stat-cache-ttl",
-				Value: time.Hour * 24 * 365 * 7,
-				Usage: "How long to cache StatObject results and inode attributes.",
-			},
-
-			cli.DurationFlag{
-				Name:  "type-cache-ttl",
-				Value: time.Hour * 24 * 365 * 7,
-				Usage: "How long to cache name -> file/dir mappings in directory " +
-					"inodes.",
-			},
+			// cli.StringFlag{
+			// 	Name: "cache",
+			// 	Usage: "Directory to use for data cache. " +
+			// 		"Requires catfs and `-o allow_other'. " +
+			// 		"Can also pass in other catfs options " +
+			// 		"(ex: --cache \"--free:10%:$HOME/cache\") (default: off)",
+			// },
 
 			/////////////////////////
 			// Debugging
 			/////////////////////////
-
+			cli.BoolFlag{
+				Name:  "debug",
+				Usage: "Enable debugging output.",
+			},
 			cli.BoolFlag{
 				Name:  "debug_fuse",
 				Usage: "Enable fuse-related debugging output.",
 			},
-
 			cli.BoolFlag{
-				Name:  "debug_s3",
-				Usage: "Enable S3-related debugging output.",
+				Name:  "debug_service",
+				Usage: "Enable service-related debugging output.",
 			},
-
 			cli.BoolFlag{
 				Name:  "f",
-				Usage: "Run goofys in foreground.",
+				Usage: "Run fusera in foreground.",
 			},
 		},
 	}
@@ -263,15 +147,7 @@ func NewApp() (app *cli.App) {
 
 	flagCategories = map[string]string{}
 
-	for _, f := range []string{"region", "sse", "sse-kms", "storage-class", "acl"} {
-		flagCategories[f] = "aws"
-	}
-
-	for _, f := range []string{"cheap", "no-implicit-dir", "stat-cache-ttl", "type-cache-ttl"} {
-		flagCategories[f] = "tuning"
-	}
-
-	for _, f := range []string{"help, h", "debug_fuse", "debug_s3", "version, v", "f"} {
+	for _, f := range []string{"help, h", "debug_fuse", "debug_service", "version, v", "f"} {
 		flagCategories[f] = "misc"
 	}
 
@@ -285,7 +161,7 @@ func NewApp() (app *cli.App) {
 }
 
 type FlagStorage struct {
-	// SDDP flags
+	// Fusera flags
 	Ncg string
 	Acc []string
 	Loc string
@@ -304,25 +180,12 @@ type FlagStorage struct {
 	Uid      uint32
 	Gid      uint32
 
-	// S3
-	Endpoint       string
-	Region         string
-	RegionSet      bool
-	StorageClass   string
-	Profile        string
-	UseContentType bool
-	UseSSE         bool
-	UseKMS         bool
-	KMSKeyID       string
-	ACL            string
-
 	// Tuning
-	Cheap        bool
-	ExplicitDir  bool
 	StatCacheTTL time.Duration
 	TypeCacheTTL time.Duration
 
 	// Debugging
+	Debug      bool
 	DebugFuse  bool
 	DebugS3    bool
 	Foreground bool
@@ -363,50 +226,36 @@ func (flags *FlagStorage) Cleanup() {
 // Add the flags accepted by run to the supplied flag set, returning the
 // variables into which the flags will parse.
 func PopulateFlags(c *cli.Context) (ret *FlagStorage) {
+	uid, gid := MyUserAndGroup()
 	flags := &FlagStorage{
-		// SDDP
+		// Fusera
 		Ncg: c.String("ncg"),
 		Acc: c.StringSlice("acc"),
 		Loc: c.String("loc"),
 
 		// File system
 		MountOptions: make(map[string]string),
-		DirMode:      os.FileMode(c.Int("dir-mode")),
-		FileMode:     os.FileMode(c.Int("file-mode")),
-		Uid:          uint32(c.Int("uid")),
-		Gid:          uint32(c.Int("gid")),
+		DirMode:      0755,
+		FileMode:     0644,
+		Uid:          uint32(uid),
+		Gid:          uint32(gid),
 
 		// Tuning,
-		Cheap:        c.Bool("cheap"),
-		ExplicitDir:  c.Bool("no-implicit-dir"),
-		StatCacheTTL: c.Duration("stat-cache-ttl"),
-		TypeCacheTTL: c.Duration("type-cache-ttl"),
-
-		// S3
-		Endpoint:       c.String("endpoint"),
-		Region:         c.String("region"),
-		RegionSet:      c.IsSet("region"),
-		StorageClass:   c.String("storage-class"),
-		Profile:        c.String("profile"),
-		UseContentType: c.Bool("use-content-type"),
-		UseSSE:         c.Bool("sse"),
-		UseKMS:         c.IsSet("sse-kms"),
-		KMSKeyID:       c.String("sse-kms"),
-		ACL:            c.String("acl"),
+		StatCacheTTL: time.Hour * 24 * 365 * 7,
+		TypeCacheTTL: time.Hour * 24 * 365 * 7,
 
 		// Debugging,
+		Debug:      c.Bool("debug"),
 		DebugFuse:  c.Bool("debug_fuse"),
 		DebugS3:    c.Bool("debug_s3"),
 		Foreground: c.Bool("f"),
 	}
 
-	// Handle the repeated "-o" flag.
-	for _, o := range c.StringSlice("o") {
-		parseOptions(flags.MountOptions, o)
-	}
-
 	flags.MountPointArg = c.Args()[0]
 	flags.MountPoint = flags.MountPointArg
+
+	twig.SetDebug(flags.Debug)
+
 	var err error
 
 	defer func() {
@@ -470,11 +319,6 @@ func PopulateFlags(c *cli.Context) (ret *FlagStorage) {
 		flags.Cache = cacheArgs[1:]
 	}
 
-	// KMS implies SSE
-	if flags.UseKMS {
-		flags.UseSSE = true
-	}
-
 	return flags
 }
 
@@ -505,6 +349,34 @@ func MassageMountFlags(args []string) (ret []string) {
 	} else {
 		return args
 	}
+
+	return
+}
+
+// Return the UID and GID of this process.
+func MyUserAndGroup() (uid int, gid int) {
+	// Ask for the current user.
+	user, err := user.Current()
+	if err != nil {
+		panic(err)
+	}
+
+	// Parse UID.
+	uid64, err := strconv.ParseInt(user.Uid, 10, 32)
+	if err != nil {
+		log.Fatalf("Parsing UID (%s): %v", user.Uid, err)
+		return
+	}
+
+	// Parse GID.
+	gid64, err := strconv.ParseInt(user.Gid, 10, 32)
+	if err != nil {
+		log.Fatalf("Parsing GID (%s): %v", user.Gid, err)
+		return
+	}
+
+	uid = int(uid64)
+	gid = int(gid64)
 
 	return
 }

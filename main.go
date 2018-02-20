@@ -16,6 +16,7 @@
 package main
 
 import (
+	"github.com/mattrbianchi/twig"
 	. "github.com/mitre/fusera/internal"
 
 	"fmt"
@@ -35,9 +36,13 @@ import (
 	daemon "github.com/sevlyar/go-daemon"
 )
 
+func init() {
+	twig.SetFlags(twig.LstdFlags | twig.Lshortfile)
+}
+
 var log = GetLogger("main")
 
-func registerSIGINTHandler(fs *SDDP, flags *FlagStorage) {
+func registerSIGINTHandler(fs *Fusera, flags *FlagStorage) {
 	// Register for SIGINT.
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM, syscall.SIGUSR1)
@@ -101,12 +106,8 @@ func kill(pid int, s os.Signal) (err error) {
 
 // Mount the file system based on the supplied arguments, returning a
 // fuse.MountedFileSystem that can be joined to wait for unmounting.
-// func sddp_mount(ctx context.Context, flags *FlagStorage) (*Goofys, *fuse.MountedFileSystem, error) {
-// 	return Mount(ctx, flags)
-// }
-
-func sddp_mount(ctx context.Context, flags *FlagStorage) (*SDDP, *fuse.MountedFileSystem, error) {
-	return SDDP_Mount(ctx, flags)
+func mount(ctx context.Context, flags *FlagStorage) (*Fusera, *fuse.MountedFileSystem, error) {
+	return Mount(ctx, flags)
 }
 
 func massagePath() {
@@ -133,6 +134,8 @@ var Version = "use `make build' to fill version hash correctly"
 
 func main() {
 	VersionHash = Version
+	// twig.SetDebug(true)
+	// twig.Info("testing twig output")
 
 	massagePath()
 
@@ -167,7 +170,7 @@ func main() {
 
 		// Evaluate mandatory flags
 		if flags.Acc == nil {
-			return fmt.Errorf("sddp expects a list of accessions")
+			return fmt.Errorf("fusera expects a list of accessions")
 		}
 		fmt.Println("Acc:", flags.Acc)
 
@@ -207,8 +210,8 @@ func main() {
 
 		// Mount the file system.
 		var mfs *fuse.MountedFileSystem
-		var fs *SDDP
-		fs, mfs, err = sddp_mount(context.Background(), flags)
+		var fs *Fusera
+		fs, mfs, err = mount(context.Background(), flags)
 
 		if err != nil {
 			if !flags.Foreground {

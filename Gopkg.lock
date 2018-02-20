@@ -8,45 +8,6 @@
   revision = "5d049714c4a64225c3c79a7cf7d02f7fb5b96338"
 
 [[projects]]
-  name = "github.com/aws/aws-sdk-go"
-  packages = [
-    "aws",
-    "aws/awserr",
-    "aws/awsutil",
-    "aws/client",
-    "aws/client/metadata",
-    "aws/corehandlers",
-    "aws/credentials",
-    "aws/credentials/ec2rolecreds",
-    "aws/credentials/endpointcreds",
-    "aws/credentials/stscreds",
-    "aws/defaults",
-    "aws/ec2metadata",
-    "aws/endpoints",
-    "aws/request",
-    "aws/session",
-    "aws/signer/v4",
-    "internal/sdkrand",
-    "internal/shareddefaults",
-    "private/protocol",
-    "private/protocol/query",
-    "private/protocol/query/queryutil",
-    "private/protocol/rest",
-    "private/protocol/restxml",
-    "private/protocol/xml/xmlutil",
-    "service/s3",
-    "service/sts"
-  ]
-  revision = "bff41fb23b7550368282029f6478819d6a99ae0f"
-  version = "v1.12.79"
-
-[[projects]]
-  name = "github.com/go-ini/ini"
-  packages = ["."]
-  revision = "32e4c1e6bc4e7d0d8451aa6b75200d19e37a536a"
-  version = "v1.32.0"
-
-[[projects]]
   name = "github.com/go-ole/go-ole"
   packages = [
     ".",
@@ -67,17 +28,6 @@
     "internal/fusekernel"
   ]
   revision = "3b434060032d594d1a6f5145e7b100bc09ebd1b5"
-
-[[projects]]
-  name = "github.com/jmespath/go-jmespath"
-  packages = ["."]
-  revision = "0b12d6b5"
-
-[[projects]]
-  name = "github.com/kahing/go-xattr"
-  packages = ["."]
-  revision = "d205d0a1b9316c5abcfc61b261d5312301b33e4d"
-  version = "v1.1.1"
 
 [[projects]]
   branch = "master"
@@ -145,6 +95,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "9b76c7684edbd4719fc3c786f7b2a0e1e2639de2249b5329a4509617fcfe024d"
+  inputs-digest = "bed2c4baf8b3546c8abbc4f71d3dd96b96daf4c8d005b7e86b1125506fa9f3a0"
   solver-name = "gps-cdcl"
   solver-version = 1
