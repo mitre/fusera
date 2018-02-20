@@ -134,8 +134,6 @@ var Version = "use `make build' to fill version hash correctly"
 
 func main() {
 	VersionHash = Version
-	// twig.SetDebug(true)
-	// twig.Info("testing twig output")
 
 	massagePath()
 
@@ -147,20 +145,16 @@ func main() {
 	app.Action = func(c *cli.Context) (err error) {
 		// We should get one argument exactly. Otherwise error out.
 		if len(c.Args()) != 1 {
-			fmt.Fprintf(
-				os.Stderr,
-				"Error: %s takes exactly one argument.\n\n",
-				app.Name)
+			fmt.Fprintf(os.Stderr, "Error: %s takes exactly one argument.\n\n", app.Name)
 			cli.ShowAppHelp(c)
 			os.Exit(1)
 		}
 
 		// Populate and parse flags.
-		fmt.Println("about to PopulateFlags")
 		flags = PopulateFlags(c)
 		if flags == nil {
 			cli.ShowAppHelp(c)
-			err = fmt.Errorf("invalid arguments")
+			fmt.Fprintf(os.Stderr, "invalid arguments\n\n")
 			return
 		}
 		defer func() {
@@ -170,9 +164,10 @@ func main() {
 
 		// Evaluate mandatory flags
 		if flags.Acc == nil {
-			return fmt.Errorf("fusera expects a list of accessions")
+			fmt.Fprintf(os.Stderr, "fusera expects a list of accessions\n\n")
+			os.Exit(1)
 		}
-		fmt.Println("Acc:", flags.Acc)
+		twig.Debugf("accs: %s", flags.Acc)
 
 		if !flags.Foreground {
 			var wg sync.WaitGroup
@@ -184,7 +179,8 @@ func main() {
 			child, err = ctx.Reborn()
 
 			if err != nil {
-				panic(fmt.Sprintf("unable to daemonize: %v", err))
+				fmt.Fprintf(os.Stderr, "unable to daemonize: %v", err)
+				os.Exit(1)
 			}
 
 			InitLoggers(!flags.Foreground && child == nil)
@@ -212,18 +208,17 @@ func main() {
 		var mfs *fuse.MountedFileSystem
 		var fs *Fusera
 		fs, mfs, err = mount(context.Background(), flags)
-
 		if err != nil {
 			if !flags.Foreground {
 				kill(os.Getppid(), syscall.SIGUSR2)
 			}
-			log.Fatalf("Mounting file system: %v", err)
-			// fatal also terminates itself
+			fmt.Fprintf(os.Stderr, "FATAL: Mounting file system: %+v\n", err)
+			os.Exit(1)
 		} else {
 			if !flags.Foreground {
 				kill(os.Getppid(), syscall.SIGUSR1)
 			}
-			log.Println("File system has been successfully mounted.")
+			twig.Info("File system has been successfully mounted.")
 			// Let the user unmount with Ctrl-C
 			// (SIGINT). But if cache is on, catfs will
 			// receive the signal and we would detect that exiting
@@ -232,11 +227,11 @@ func main() {
 			// Wait for the file system to be unmounted.
 			err = mfs.Join(context.Background())
 			if err != nil {
-				err = fmt.Errorf("MountedFileSystem.Join: %v", err)
+				fmt.Fprintf(os.Stderr, "MountedFileSystem.Join: %v", err)
 				return
 			}
 
-			log.Println("Successfully exiting.")
+			twig.Info("Successfully exiting.")
 		}
 		return
 	}
@@ -244,7 +239,7 @@ func main() {
 	err := app.Run(MassageMountFlags(os.Args))
 	if err != nil {
 		if flags != nil && !flags.Foreground && child != nil {
-			log.Fatalln("Unable to mount file system, see syslog for details")
+			fmt.Fprint(os.Stderr, "Unable to mount file system, see syslog for details")
 		}
 		os.Exit(1)
 	}

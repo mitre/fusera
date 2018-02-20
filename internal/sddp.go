@@ -26,8 +26,11 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/mattrbianchi/twig"
 	"github.com/mitre/fusera/awsutil"
 	"github.com/mitre/fusera/nr"
+	"github.com/pkg/errors"
+
 	"github.com/sirupsen/logrus"
 
 	"github.com/jacobsa/fuse"
@@ -36,11 +39,12 @@ import (
 )
 
 func Mount(ctx context.Context, flags *FlagStorage) (*Fusera, *fuse.MountedFileSystem, error) {
-	fmt.Println("about to call NewFusera")
-	fs := NewFusera(ctx, flags)
-	fmt.Println("out of NewFusera")
+	fs, err := NewFusera(ctx, flags)
+	if err != nil {
+		return nil, nil, err
+	}
 	if fs == nil {
-		return nil, nil, fmt.Errorf("Mount: initialization failed")
+		return nil, nil, errors.New("Mount: initialization failed")
 	}
 	s := fuseutil.NewFileSystemServer(fs)
 	fuseLog := GetLogger("fuse")
@@ -56,13 +60,16 @@ func Mount(ctx context.Context, flags *FlagStorage) (*Fusera, *fuse.MountedFileS
 	}
 	mfs, err := fuse.Mount(flags.MountPoint, s, mntConfig)
 	if err != nil {
-		return nil, nil, fmt.Errorf("Mount: %v", err)
+		return nil, nil, errors.Errorf("Mount: %v", err)
 	}
 	return fs, mfs, nil
 }
 
-func NewFusera(ctx context.Context, flags *FlagStorage) *Fusera {
-	payload := nr.ResolveNames(flags.Loc, flags.Ncg, flags.Acc)
+func NewFusera(ctx context.Context, flags *FlagStorage) (*Fusera, error) {
+	payload, err := nr.ResolveNames(flags.Loc, flags.Ncg, flags.Acc)
+	if err != nil {
+		return nil, err
+	}
 	fs := &Fusera{
 		accs:  payload,
 		flags: flags,
@@ -126,7 +133,7 @@ func NewFusera(ctx context.Context, flags *FlagStorage) *Fusera {
 			file.Link = payload[i].Files[j].Link
 			u, err := strconv.ParseUint(payload[i].Files[j].Size, 10, 64)
 			if err != nil {
-				panic("failed to parse size into a uint64")
+				return nil, errors.New("failed to parse size into a uint64")
 			}
 			file.Attributes = InodeAttributes{
 				Size:  u,
@@ -159,7 +166,7 @@ func NewFusera(ctx context.Context, flags *FlagStorage) *Fusera {
 		}
 	}
 
-	return fs
+	return fs, nil
 }
 
 type Fusera struct {
@@ -218,8 +225,8 @@ func (fs *Fusera) allocateInodeId() (id fuseops.InodeID) {
 func (fs *Fusera) SigUsr1() {
 	fs.mu.Lock()
 
-	log.Infof("forgot %v inodes", fs.forgotCnt)
-	log.Infof("%v inodes", len(fs.inodes))
+	twig.Infof("forgot %v inodes", fs.forgotCnt)
+	twig.Infof("%v inodes", len(fs.inodes))
 	fs.mu.Unlock()
 	debug.FreeOSMemory()
 }

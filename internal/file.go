@@ -119,7 +119,7 @@ func (fh *FileHandle) readFromReadAhead(offset uint64, buf []byte) (bytesRead in
 }
 
 func (fh *FileHandle) ReadFile(offset int64, buf []byte) (bytesRead int, err error) {
-	twig.Debug("file.go/ReadFile called")
+	twig.Debug("ReadFile called")
 	fh.inode.logFuse("ReadFile", offset, len(buf))
 	defer func() {
 		fh.inode.logFuse("< ReadFile", bytesRead, err)
@@ -148,7 +148,7 @@ func (fh *FileHandle) ReadFile(offset int64, buf []byte) (bytesRead int, err err
 }
 
 func (fh *FileHandle) readFile(offset int64, buf []byte) (bytesRead int, err error) {
-	twig.Debug("file.go/readFile called")
+	twig.Debug("readFile called")
 	defer func() {
 		if bytesRead > 0 {
 			fh.readBufOffset += int64(bytesRead)
@@ -159,7 +159,7 @@ func (fh *FileHandle) readFile(offset int64, buf []byte) (bytesRead int, err err
 	}()
 
 	if uint64(offset) >= fh.inode.Attributes.Size {
-		fmt.Println("Nothing to read")
+		twig.Debug("nothing to read")
 		// nothing to read
 		if fh.inode.Invalid {
 			err = fuse.ENOENT

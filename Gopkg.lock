@@ -36,6 +36,18 @@
   revision = "ae77be60afb1dcacde03767a8c37337fad28ac14"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/mattrbianchi/twig"
+  packages = ["."]
+  revision = "6b44e8964e3c54871117ec6de5b84bde7c401026"
+
+[[projects]]
+  name = "github.com/pkg/errors"
+  packages = ["."]
+  revision = "645ef00459ed84a119197bfb8d8205042c6df63d"
+  version = "v0.8.0"
+
+[[projects]]
   name = "github.com/sevlyar/go-daemon"
   packages = ["."]
   revision = "e49ef56654f54139c4dc0285f973f74e9649e729"
@@ -95,6 +107,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "bed2c4baf8b3546c8abbc4f71d3dd96b96daf4c8d005b7e86b1125506fa9f3a0"
+  inputs-digest = "5056e8aa878affe9d09d519f36f67a8d68affecd8ec797e720338574ea2b543a"
   solver-name = "gps-cdcl"
   solver-version = 1
