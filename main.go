@@ -145,7 +145,7 @@ func main() {
 	app.Action = func(c *cli.Context) (err error) {
 		// We should get one argument exactly. Otherwise error out.
 		if len(c.Args()) != 1 {
-			fmt.Fprintf(os.Stderr, "Error: %s takes exactly one argument.\n\n", app.Name)
+			twig.Infof("Error: %s takes exactly one argument.\n\n", app.Name)
 			cli.ShowAppHelp(c)
 			os.Exit(1)
 		}
@@ -154,7 +154,7 @@ func main() {
 		flags = PopulateFlags(c)
 		if flags == nil {
 			cli.ShowAppHelp(c)
-			fmt.Fprintf(os.Stderr, "invalid arguments\n\n")
+			twig.Info("invalid arguments\n\n")
 			return
 		}
 		defer func() {
@@ -164,7 +164,7 @@ func main() {
 
 		// Evaluate mandatory flags
 		if flags.Acc == nil {
-			fmt.Fprintf(os.Stderr, "fusera expects a list of accessions\n\n")
+			twig.Info("fusera expects a list of accessions\n\n")
 			os.Exit(1)
 		}
 		twig.Debugf("accs: %s", flags.Acc)
@@ -179,7 +179,8 @@ func main() {
 			child, err = ctx.Reborn()
 
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "unable to daemonize: %v", err)
+				twig.Info(fmt.Sprintf("FATAL: unable to daemonize: %v\n", err))
+				twig.Debug(fmt.Sprintf("FATAL: unable to daemonize: %+v\n", err))
 				os.Exit(1)
 			}
 
@@ -212,7 +213,8 @@ func main() {
 			if !flags.Foreground {
 				kill(os.Getppid(), syscall.SIGUSR2)
 			}
-			fmt.Fprintf(os.Stderr, "FATAL: Mounting file system: %+v\n", err)
+			twig.Info(fmt.Sprintf("FATAL: Mounting file system: %v\n", err))
+			twig.Debug(fmt.Sprintf("FATAL: Mounting file system: %+v\n", err))
 			os.Exit(1)
 		} else {
 			if !flags.Foreground {
@@ -227,7 +229,8 @@ func main() {
 			// Wait for the file system to be unmounted.
 			err = mfs.Join(context.Background())
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "MountedFileSystem.Join: %v", err)
+				twig.Info(fmt.Sprintf("FATAL: MountedFileSystem.Join: %v", err))
+				twig.Debug(fmt.Sprintf("FATAL: MountedFileSystem.Join: %+v", err))
 				return
 			}
 
@@ -239,7 +242,9 @@ func main() {
 	err := app.Run(MassageMountFlags(os.Args))
 	if err != nil {
 		if flags != nil && !flags.Foreground && child != nil {
-			fmt.Fprint(os.Stderr, "Unable to mount file system, see syslog for details")
+			// fmt.Fprint(os.Stderr, "Unable to mount file system, see syslog for details")
+			twig.Info(fmt.Sprintf("FATAL: Unable to mount file system: %v", err))
+			twig.Debug(fmt.Sprintf("FATAL: Unable to mount file system: %+v", err))
 		}
 		os.Exit(1)
 	}

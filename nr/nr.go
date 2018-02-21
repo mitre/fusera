@@ -36,7 +36,7 @@ func ResolveNames(loc string, ncg string, accs []string) ([]Accession, error) {
 		// handle ncg file
 		file, err := os.Open(ncg)
 		if err != nil {
-			return nil, errors.Errorf("couldn't open ncg file at: %s", ncg)
+			return nil, errors.Wrapf(err, "couldn't open ncg file at: %s", ncg)
 		}
 		defer file.Close()
 
@@ -86,6 +86,7 @@ func ResolveNames(loc string, ncg string, accs []string) ([]Accession, error) {
 		return nil, errors.New("can't create request to Name Resolver API")
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
+	twig.Debugf("HTTP REQUEST:\n %+v", req)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, errors.New("can't resolve acc names")
