@@ -66,7 +66,7 @@ func Mount(ctx context.Context, flags *FlagStorage) (*Fusera, *fuse.MountedFileS
 }
 
 func NewFusera(ctx context.Context, flags *FlagStorage) (*Fusera, error) {
-	payload, err := nr.ResolveNames(flags.Loc, flags.Ncg, flags.Acc)
+	payload, err := nr.ResolveNames(flags.Loc, flags.Ngc, flags.Acc)
 	if err != nil {
 		return nil, err
 	}

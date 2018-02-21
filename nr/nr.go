@@ -25,28 +25,28 @@ import (
 	"github.com/pkg/errors"
 )
 
-func ResolveNames(loc string, ncg string, accs []string) ([]Accession, error) {
+func ResolveNames(loc string, ngc string, accs []string) ([]Accession, error) {
 	url := "https://www.ncbi.nlm.nih.gov/Traces/names_test/names.cgi"
 	// url := "http://localhost:8000/"
 	// acc := strings.Join(accs, ",")
 	// fmt.Println("accs sent to name resolver: ", acc)
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
-	if ncg != "" {
+	if ngc != "" {
 		// handle ncg file
-		file, err := os.Open(ncg)
+		file, err := os.Open(ngc)
 		if err != nil {
-			return nil, errors.Wrapf(err, "couldn't open ncg file at: %s", ncg)
+			return nil, errors.Wrapf(err, "couldn't open ngc file at: %s", ngc)
 		}
 		defer file.Close()
 
-		part, err := writer.CreateFormFile("ncg", filepath.Base(ncg))
+		part, err := writer.CreateFormFile("ngc", filepath.Base(ngc))
 		if err != nil {
-			return nil, errors.Errorf("couldn't create form file from given ncg file: %s", filepath.Base(ncg))
+			return nil, errors.Errorf("couldn't create form file from given ngc file: %s", filepath.Base(ngc))
 		}
 		_, err = io.Copy(part, file)
 		if err != nil {
-			return nil, errors.Errorf("couldn't copy given ncg file: %s into multipart file to make request", ncg)
+			return nil, errors.Errorf("couldn't copy given ngc file: %s into multipart file to make request", ngc)
 		}
 
 	}

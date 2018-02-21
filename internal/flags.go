@@ -94,8 +94,8 @@ func NewApp() (app *cli.App) {
 			/////////////////////////
 
 			cli.StringFlag{
-				Name:  "ncg",
-				Usage: "path to an ncg file that contains authentication info.",
+				Name:  "ngc",
+				Usage: "path to an ngc file that contains authentication info.",
 			},
 			cli.StringSliceFlag{
 				Name:  "acc",
@@ -162,7 +162,7 @@ func NewApp() (app *cli.App) {
 
 type FlagStorage struct {
 	// Fusera flags
-	Ncg string
+	Ngc string
 	Acc []string
 	Loc string
 	// SRR# has a map of file names that map to urls where the data is
@@ -229,7 +229,7 @@ func PopulateFlags(c *cli.Context) (ret *FlagStorage) {
 	uid, gid := MyUserAndGroup()
 	flags := &FlagStorage{
 		// Fusera
-		Ncg: c.String("ncg"),
+		Ngc: c.String("ngc"),
 		Acc: c.StringSlice("acc"),
 		Loc: c.String("loc"),
 
