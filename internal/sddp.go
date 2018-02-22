@@ -111,7 +111,7 @@ func NewFusera(ctx context.Context, flags *FlagStorage) (*Fusera, error) {
 	for i := range payload {
 		// make directories here
 		// dir
-		fmt.Println("making dir: ", payload[i].ID)
+		//fmt.Println("making dir: ", payload[i].ID)
 		fullDirName := root.getChildName(payload[i].ID)
 		root.mu.Lock()
 		dir := NewInode(fs, root, &payload[i].ID, &fullDirName)
@@ -125,7 +125,7 @@ func NewFusera(ctx context.Context, flags *FlagStorage) (*Fusera, error) {
 		// dir.addDotAndDotDot()
 		// put some files in the dirs
 		for j := range payload[i].Files {
-			fmt.Println("making file: ", payload[i].Files[j].Name)
+			//fmt.Println("making file: ", payload[i].Files[j].Name)
 			fullFileName := dir.getChildName(payload[i].Files[j].Name)
 			dir.mu.Lock()
 			file := NewInode(fs, dir, &payload[i].Files[j].Name, &fullFileName)
@@ -244,7 +244,7 @@ func (fs *Fusera) getInodeOrDie(id fuseops.InodeID) (inode *Inode) {
 }
 
 func (fs *Fusera) StatFS(ctx context.Context, op *fuseops.StatFSOp) (err error) {
-	fmt.Println("sddp.go/StatFS called")
+	//fmt.Println("sddp.go/StatFS called")
 
 	const BLOCK_SIZE = 4096
 	const TOTAL_SPACE = 1 * 1024 * 1024 * 1024 * 1024 * 1024 // 1PB
@@ -261,7 +261,7 @@ func (fs *Fusera) StatFS(ctx context.Context, op *fuseops.StatFSOp) (err error) 
 }
 
 func (fs *Fusera) GetInodeAttributes(ctx context.Context, op *fuseops.GetInodeAttributesOp) (err error) {
-	fmt.Println("sddp.go/GetInodeAttributes called")
+	//fmt.Println("sddp.go/GetInodeAttributes called")
 
 	fs.mu.Lock()
 	inode := fs.getInodeOrDie(op.Inode)
@@ -277,7 +277,7 @@ func (fs *Fusera) GetInodeAttributes(ctx context.Context, op *fuseops.GetInodeAt
 }
 
 func (fs *Fusera) GetXattr(ctx context.Context, op *fuseops.GetXattrOp) (err error) {
-	fmt.Println("sddp.go/GetXattr called")
+	//fmt.Println("sddp.go/GetXattr called")
 	fs.mu.Lock()
 	inode := fs.getInodeOrDie(op.Inode)
 	fs.mu.Unlock()
@@ -298,7 +298,7 @@ func (fs *Fusera) GetXattr(ctx context.Context, op *fuseops.GetXattrOp) (err err
 }
 
 func (fs *Fusera) ListXattr(ctx context.Context, op *fuseops.ListXattrOp) (err error) {
-	fmt.Println("sddp.go/ListXattr called")
+	//fmt.Println("sddp.go/ListXattr called")
 	fs.mu.Lock()
 	inode := fs.getInodeOrDie(op.Inode)
 	fs.mu.Unlock()
@@ -328,9 +328,9 @@ func (fs *Fusera) ListXattr(ctx context.Context, op *fuseops.ListXattrOp) (err e
 }
 
 func (fs *Fusera) LookUpInode(ctx context.Context, op *fuseops.LookUpInodeOp) (err error) {
-	fmt.Println("sddp.go/LookUpInode called with:")
-	fmt.Println("op.Parent: ", op.Parent)
-	fmt.Println("op.Name: ", op.Name)
+	//fmt.Println("sddp.go/LookUpInode called with:")
+	//fmt.Println("op.Parent: ", op.Parent)
+	//fmt.Println("op.Name: ", op.Name)
 
 	var inode *Inode
 	var ok bool
@@ -367,15 +367,15 @@ func (fs *Fusera) LookUpInode(ctx context.Context, op *fuseops.LookUpInodeOp) (e
 // LOCKS_REQUIRED(fs.mu)
 // LOCKS_REQUIRED(parent.mu)
 func (fs *Fusera) insertInode(parent *Inode, inode *Inode) {
-	fmt.Println("sddp.go/insertInode called")
+	//fmt.Println("sddp.go/insertInode called")
 	inode.Id = fs.allocateInodeId()
 	parent.insertChildUnlocked(inode)
 	fs.inodes[inode.Id] = inode
 }
 
 func (fs *Fusera) OpenDir(ctx context.Context, op *fuseops.OpenDirOp) (err error) {
-	fmt.Println("sddp.go/OpenDir called with")
-	fmt.Println("op.Inode: ", op.Inode)
+	//fmt.Println("sddp.go/OpenDir called with")
+	//fmt.Println("op.Inode: ", op.Inode)
 	fs.mu.Lock()
 
 	handleID := fs.nextHandleID
@@ -398,7 +398,7 @@ func (fs *Fusera) OpenDir(ctx context.Context, op *fuseops.OpenDirOp) (err error
 
 // LOCKS_EXCLUDED(fs.mu)
 func (fs *Fusera) insertInodeFromDirEntry(parent *Inode, entry *DirHandleEntry) (inode *Inode) {
-	fmt.Println("sddp.go/insertInodeFromDirEntry called")
+	//fmt.Println("sddp.go/insertInodeFromDirEntry called")
 	parent.mu.Lock()
 	defer parent.mu.Unlock()
 
@@ -443,10 +443,10 @@ func (fs *Fusera) insertInodeFromDirEntry(parent *Inode, entry *DirHandleEntry) 
 }
 
 func makeDirEntry(en *DirHandleEntry) fuseutil.Dirent {
-	fmt.Println("sddp.go/makeDirEntry called with")
-	fmt.Println("en.Name: ", *en.Name)
-	fmt.Println("en.Type: ", en.Type)
-	fmt.Println("en.Offset: ", en.Offset)
+	//fmt.Println("sddp.go/makeDirEntry called with")
+	//fmt.Println("en.Name: ", *en.Name)
+	//fmt.Println("en.Type: ", en.Type)
+	//fmt.Println("en.Offset: ", en.Offset)
 	return fuseutil.Dirent{
 		Name:   *en.Name,
 		Type:   en.Type,
@@ -457,8 +457,8 @@ func makeDirEntry(en *DirHandleEntry) fuseutil.Dirent {
 
 // LOCKS_EXCLUDED(fs.mu)
 func (fs *Fusera) ReadDir(ctx context.Context, op *fuseops.ReadDirOp) (err error) {
-	fmt.Println("sddp.go/ReadDir called with")
-	fmt.Println("op.Handle: ", op.Handle)
+	//fmt.Println("sddp.go/ReadDir called with")
+	//fmt.Println("op.Handle: ", op.Handle)
 
 	// Find the handle.
 	fs.mu.Lock()
@@ -511,7 +511,7 @@ func (fs *Fusera) ReadDir(ctx context.Context, op *fuseops.ReadDirOp) (err error
 }
 
 func (fs *Fusera) ReleaseDirHandle(ctx context.Context, op *fuseops.ReleaseDirHandleOp) (err error) {
-	fmt.Println("sddp.go/ReleaseDirHandle called")
+	//fmt.Println("sddp.go/ReleaseDirHandle called")
 
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
@@ -527,7 +527,7 @@ func (fs *Fusera) ReleaseDirHandle(ctx context.Context, op *fuseops.ReleaseDirHa
 }
 
 func (fs *Fusera) OpenFile(ctx context.Context, op *fuseops.OpenFileOp) (err error) {
-	fmt.Println("sddp.go/OpenFile called")
+	//fmt.Println("sddp.go/OpenFile called")
 	fs.mu.Lock()
 	in := fs.getInodeOrDie(op.Inode)
 	fs.mu.Unlock()
@@ -552,7 +552,7 @@ func (fs *Fusera) OpenFile(ctx context.Context, op *fuseops.OpenFileOp) (err err
 }
 
 func (fs *Fusera) ReadFile(ctx context.Context, op *fuseops.ReadFileOp) (err error) {
-	fmt.Println("sddp.go/ReadFile called")
+	//fmt.Println("sddp.go/ReadFile called")
 
 	fs.mu.Lock()
 	fh := fs.fileHandles[op.Handle]
@@ -571,7 +571,7 @@ func (fs *Fusera) SyncFile(ctx context.Context, op *fuseops.SyncFileOp) (err err
 }
 
 func (fs *Fusera) ReleaseFileHandle(ctx context.Context, op *fuseops.ReleaseFileHandleOp) (err error) {
-	fmt.Println("sddp.go/ReleaseFileHandle called")
+	//fmt.Println("sddp.go/ReleaseFileHandle called")
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
 
