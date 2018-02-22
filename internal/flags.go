@@ -97,7 +97,7 @@ func NewApp() (app *cli.App) {
 				Name:  "ngc",
 				Usage: "path to an ngc file that contains authentication info.",
 			},
-			cli.StringSliceFlag{
+			cli.StringFlag{
 				Name:  "acc",
 				Usage: "comma separated list of SRR#'s that are to be mounted.",
 			},
@@ -230,7 +230,7 @@ func PopulateFlags(c *cli.Context) (ret *FlagStorage) {
 	flags := &FlagStorage{
 		// Fusera
 		Ngc: c.String("ngc"),
-		Acc: c.StringSlice("acc"),
+		Acc: strings.Split(c.String("acc"), ","),
 		Loc: c.String("loc"),
 
 		// File system
