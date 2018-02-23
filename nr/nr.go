@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/mattrbianchi/twig"
 	"github.com/pkg/errors"
@@ -95,16 +96,11 @@ func ResolveNames(loc string, ngc string, accs []string) ([]Accession, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, errors.Errorf("error from Name Resolver API: %s", resp.Status)
 	}
-	// ct := resp.Header.Get("Content-Type")
-	// if ct != "application/json" {
-	// 	return nil, errors.Errorf("Name Resolver API gave incorrect Content-Type: %s", ct)
-	// }
-
-	// Right now the API returns content type as text/json.
 	ct := resp.Header.Get("Content-Type")
-	if ct != "text/json" {
+	if ct != "application/json" {
 		return nil, errors.Errorf("Name Resolver API gave incorrect Content-Type: %s", ct)
 	}
+
 	var payload []Accession
 	err = json.NewDecoder(resp.Body).Decode(&payload)
 	if err != nil {
@@ -127,9 +123,11 @@ type Accession struct {
 }
 
 type File struct {
-	Name         string `json:"name"`
-	Size         string `json:"size"`
-	ModifiedDate string `json:"date_modification"`
-	Md5Hash      string `json:"md5"`
-	Link         string `json:"link"`
+	Name           string    `json:"name"`
+	Size           string    `json:"size"`
+	ModifiedDate   time.Time `json:"modificationDate"`
+	Md5Hash        string    `json:"md5"`
+	Link           string    `json:"link"`
+	ExpirationDate time.Time `json:"expirationDate"`
+	Service        string    `json:"service"`
 }
