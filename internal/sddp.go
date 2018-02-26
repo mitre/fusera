@@ -137,7 +137,7 @@ func NewFusera(ctx context.Context, flags *FlagStorage) (*Fusera, error) {
 			}
 			file.Attributes = InodeAttributes{
 				Size:  u,
-				Mtime: time.Now(),
+				Mtime: payload[i].Files[j].ModifiedDate,
 			}
 			fh := NewFileHandle(file)
 			fh.poolHandle = fs.bufferPool
