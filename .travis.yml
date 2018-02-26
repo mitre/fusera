@@ -1,4 +1,5 @@
 language: go
+os: osx
 before_deploy:
   - go build -o fusera-linux-amd64
   - env GOOS=darwin GOARCH=amd64 go build -o fusera-darwin-amd64
