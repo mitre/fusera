@@ -151,10 +151,10 @@ func main() {
 		}
 
 		// Populate and parse flags.
-		flags = PopulateFlags(c)
-		if flags == nil {
+		flags, err = PopulateFlags(c)
+		if flags == nil || err != nil {
 			cli.ShowAppHelp(c)
-			twig.Info("invalid arguments\n\n")
+			twig.Infof("invalid arguments: %s", err.Error())
 			return
 		}
 		defer func() {

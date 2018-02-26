@@ -99,7 +99,11 @@ func NewApp() (app *cli.App) {
 			},
 			cli.StringFlag{
 				Name:  "acc",
-				Usage: "comma separated list of SRR#'s that are to be mounted.",
+				Usage: "comma separated list of SRR#s that are to be mounted.",
+			},
+			cli.StringFlag{
+				Name:  "acc-file",
+				Usage: "path to file with comma or space separated list of SRR#s that are to be mounted.",
 			},
 			cli.StringFlag{
 				Name:  "loc",
@@ -162,9 +166,10 @@ func NewApp() (app *cli.App) {
 
 type FlagStorage struct {
 	// Fusera flags
-	Ngc string
-	Acc []string
-	Loc string
+	Ngc     string
+	Acc     []string
+	AccFile string
+	Loc     string
 	// SRR# has a map of file names that map to urls where the data is
 	Urls map[string]map[string]string
 
@@ -223,15 +228,25 @@ func (flags *FlagStorage) Cleanup() {
 	}
 }
 
+func reconcileAccs(data []byte) []string {
+	accs_csv := strings.Split(string(data), ",")
+	if len(accs_csv) != 1 {
+		return accs_csv
+	}
+	accs_tsv := strings.Split(string(data), " ")
+	return accs_tsv
+}
+
 // Add the flags accepted by run to the supplied flag set, returning the
 // variables into which the flags will parse.
-func PopulateFlags(c *cli.Context) (ret *FlagStorage) {
+func PopulateFlags(c *cli.Context) (ret *FlagStorage, err error) {
 	uid, gid := MyUserAndGroup()
 	flags := &FlagStorage{
 		// Fusera
-		Ngc: c.String("ngc"),
-		Acc: strings.Split(c.String("acc"), ","),
-		Loc: c.String("loc"),
+		Ngc:     c.String("ngc"),
+		Acc:     strings.Split(c.String("acc"), ","),
+		AccFile: c.String("acc-file"),
+		Loc:     c.String("loc"),
 
 		// File system
 		MountOptions: make(map[string]string),
@@ -251,12 +266,22 @@ func PopulateFlags(c *cli.Context) (ret *FlagStorage) {
 		Foreground: c.Bool("f"),
 	}
 
+	if flags.AccFile != "" {
+		data, err := ioutil.ReadFile(flags.AccFile)
+		if err != nil {
+			twig.Debugf("ReadFile: %s", err.Error())
+			return nil, err
+		}
+		accs := reconcileAccs(data)
+		for _, s := range accs {
+			flags.Acc = append(flags.Acc, s)
+		}
+	}
+
 	flags.MountPointArg = c.Args()[0]
 	flags.MountPoint = flags.MountPointArg
 
 	twig.SetDebug(flags.Debug)
-
-	var err error
 
 	defer func() {
 		if err != nil {
@@ -275,7 +300,7 @@ func PopulateFlags(c *cli.Context) (ret *FlagStorage) {
 			io.WriteString(cli.ErrWriter,
 				fmt.Sprintf("Invalid value \"%v\" for --cache: not a directory\n\n",
 					cacheDir))
-			return nil
+			return nil, nil
 		}
 
 		if _, ok := flags.MountOptions["allow_other"]; !ok {
@@ -283,7 +308,7 @@ func PopulateFlags(c *cli.Context) (ret *FlagStorage) {
 			if err != nil {
 				io.WriteString(cli.ErrWriter,
 					fmt.Sprintf("Unable to create temp dir: %v", err))
-				return nil
+				return nil, nil
 			}
 			flags.MountPoint = flags.MountPointCreated
 		}
@@ -313,13 +338,13 @@ func PopulateFlags(c *cli.Context) (ret *FlagStorage) {
 					fmt.Sprintf("Invalid value \"%v\" for --cache: %v\n\n",
 						cache, string(ee.Stderr)))
 			}
-			return nil
+			return nil, nil
 		}
 
 		flags.Cache = cacheArgs[1:]
 	}
 
-	return flags
+	return flags, nil
 }
 
 func MassageMountFlags(args []string) (ret []string) {
