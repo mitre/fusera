@@ -36,6 +36,7 @@ Usage
 ```ShellSession
 $ ./$GOPATH/bin/fusera --acc="" --loc="" <mountpoint>
 ```
+Note that currently, the folder you want to mount to needs to already exist.
 
 License
 ---
