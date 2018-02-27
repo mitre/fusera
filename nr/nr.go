@@ -24,7 +24,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func ResolveNames(loc string, ngc []byte, accs map[string]bool) ([]Accession, error) {
+func ResolveNames(loc string, ngc []byte, accs map[string]bool) (map[string]Accession, error) {
 	url := "https://www.ncbi.nlm.nih.gov/Traces/names_test/names.cgi"
 	// url := "http://localhost:8000/"
 	// acc := strings.Join(accs, ",")
@@ -93,7 +93,7 @@ func ResolveNames(loc string, ngc []byte, accs map[string]bool) ([]Accession, er
 		return nil, errors.Errorf("Name Resolver API gave incorrect Content-Type: %s", ct)
 	}
 
-	var payload []Accession
+	var payload []Payload
 	err = json.NewDecoder(resp.Body).Decode(&payload)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to decode response from Name Resolver API")
@@ -104,14 +104,51 @@ func ResolveNames(loc string, ngc []byte, accs map[string]bool) ([]Accession, er
 		twig.Debugf("Response from Name Resolver API:\n%s", string(j))
 	}
 
-	return payload, nil
+	accessions := sanitize(payload)
+
+	return accessions, nil
 }
 
-type Accession struct {
+func sanitize(payload []Payload) map[string]Accession {
+	accs := make(map[string]Accession)
+	for _, p := range payload {
+		// OK, so we don't want duplicate ACCs...
+		// but if we get duplicates, I guess we could union the files given...
+		// but then we don't want duplicate files...
+		// fun...
+		if p.Status != http.StatusOK {
+			twig.Infof("issue with getting files for %s: %s", p.ID, p.Message)
+			continue
+		}
+		// get existing acc or make a new one
+		acc := Accession{ID: p.ID, Files: make(map[string]File)}
+		if a, ok := accs[p.ID]; ok {
+			// so we have a duplicate acc...
+			acc = a
+		}
+		for _, f := range p.Files {
+			if f.Link == "" {
+				twig.Infof("API returned no link for %s", f.Name)
+				continue
+			}
+			acc.Files[f.Name] = f
+		}
+		// finally finished with acc
+		accs[acc.ID] = acc
+	}
+	return accs
+}
+
+type Payload struct {
 	ID      string `json:"accession,omitempty"`
 	Status  int    `json:"status,omitempty"`
 	Message string `json:"message,omitempty"`
 	Files   []File `json:"files,omitempty"`
+}
+
+type Accession struct {
+	ID    string `json:"accession,omitempty"`
+	Files map[string]File
 }
 
 type File struct {

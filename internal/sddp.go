@@ -66,12 +66,12 @@ func Mount(ctx context.Context, flags *FlagStorage) (*Fusera, *fuse.MountedFileS
 }
 
 func NewFusera(ctx context.Context, flags *FlagStorage) (*Fusera, error) {
-	payload, err := nr.ResolveNames(flags.Loc, flags.Ngc, flags.Acc)
+	accessions, err := nr.ResolveNames(flags.Loc, flags.Ngc, flags.Acc)
 	if err != nil {
 		return nil, err
 	}
 	fs := &Fusera{
-		accs:  payload,
+		accs:  accessions,
 		flags: flags,
 		umask: 0122,
 	}
@@ -108,13 +108,13 @@ func NewFusera(ctx context.Context, flags *FlagStorage) (*Fusera, error) {
 
 	http.DefaultTransport.(*http.Transport).MaxIdleConnsPerHost = 1000
 
-	for i := range payload {
+	for id, acc := range accessions {
 		// make directories here
 		// dir
-		//fmt.Println("making dir: ", payload[i].ID)
-		fullDirName := root.getChildName(payload[i].ID)
+		//fmt.Println("making dir: ", accessions[i].ID)
+		fullDirName := root.getChildName(id)
 		root.mu.Lock()
-		dir := NewInode(fs, root, &payload[i].ID, &fullDirName)
+		dir := NewInode(fs, root, awsutil.String(id), &fullDirName)
 		dir.ToDir()
 		dir.touch()
 		root.mu.Unlock()
@@ -124,22 +124,22 @@ func NewFusera(ctx context.Context, flags *FlagStorage) (*Fusera, error) {
 		// maybe do this?
 		// dir.addDotAndDotDot()
 		// put some files in the dirs
-		for j := range payload[i].Files {
-			//fmt.Println("making file: ", payload[i].Files[j].Name)
-			fullFileName := dir.getChildName(payload[i].Files[j].Name)
+		for name, f := range acc.Files {
+			//fmt.Println("making file: ", accessions[i].Files[j].Name)
+			fullFileName := dir.getChildName(name)
 			dir.mu.Lock()
-			file := NewInode(fs, dir, &payload[i].Files[j].Name, &fullFileName)
+			file := NewInode(fs, dir, awsutil.String(name), &fullFileName)
 			// TODO: This will have to change when the real API is made
-			file.Link = payload[i].Files[j].Link
-			file.Acc = payload[i].ID
-			u, err := strconv.ParseUint(payload[i].Files[j].Size, 10, 64)
+			file.Link = f.Link
+			file.Acc = acc.ID
+			u, err := strconv.ParseUint(f.Size, 10, 64)
 			if err != nil {
 				return nil, errors.New("failed to parse size into a uint64")
 			}
 			file.Attributes = InodeAttributes{
 				Size:           u,
-				Mtime:          payload[i].Files[j].ModifiedDate,
-				ExpirationDate: payload[i].Files[j].ExpirationDate,
+				Mtime:          f.ModifiedDate,
+				ExpirationDate: f.ExpirationDate,
 			}
 
 			fh := NewFileHandle(file)
@@ -176,7 +176,7 @@ type Fusera struct {
 	fuseutil.NotImplementedFileSystem
 
 	// Fusera specific info
-	accs []nr.Accession
+	accs map[string]nr.Accession
 
 	flags *FlagStorage
 
