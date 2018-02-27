@@ -34,14 +34,16 @@ import (
 )
 
 type InodeAttributes struct {
-	Size  uint64
-	Mtime time.Time
+	Size           uint64
+	Mtime          time.Time
+	ExpirationDate time.Time
 }
 
 type Inode struct {
 	Id         fuseops.InodeID
 	Name       *string
 	Link       string
+	Acc        string
 	fs         *Fusera
 	Attributes InodeAttributes
 	KnownSize  *uint64

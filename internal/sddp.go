@@ -131,14 +131,17 @@ func NewFusera(ctx context.Context, flags *FlagStorage) (*Fusera, error) {
 			file := NewInode(fs, dir, &payload[i].Files[j].Name, &fullFileName)
 			// TODO: This will have to change when the real API is made
 			file.Link = payload[i].Files[j].Link
+			file.Acc = payload[i].ID
 			u, err := strconv.ParseUint(payload[i].Files[j].Size, 10, 64)
 			if err != nil {
 				return nil, errors.New("failed to parse size into a uint64")
 			}
 			file.Attributes = InodeAttributes{
-				Size:  u,
-				Mtime: payload[i].Files[j].ModifiedDate,
+				Size:           u,
+				Mtime:          payload[i].Files[j].ModifiedDate,
+				ExpirationDate: payload[i].Files[j].ExpirationDate,
 			}
+
 			fh := NewFileHandle(file)
 			fh.poolHandle = fs.bufferPool
 			fh.buf = MBuf{}.Init(fh.poolHandle, 0, true)

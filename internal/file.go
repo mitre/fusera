@@ -18,9 +18,11 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"time"
 
 	"github.com/mattrbianchi/twig"
 	"github.com/mitre/fusera/awsutil"
+	"github.com/mitre/fusera/nr"
 
 	"github.com/jacobsa/fuse"
 )
@@ -148,7 +150,6 @@ func (fh *FileHandle) ReadFile(offset int64, buf []byte) (bytesRead int, err err
 }
 
 func (fh *FileHandle) readFile(offset int64, buf []byte) (bytesRead int, err error) {
-	twig.Debug("readFile called")
 	defer func() {
 		if bytesRead > 0 {
 			fh.readBufOffset += int64(bytesRead)
@@ -251,6 +252,20 @@ func (fh *FileHandle) readFromStream(offset int64, buf []byte) (bytesRead int, e
 	}
 
 	if fh.reader == nil {
+		// Check if we need to get a new URL
+		// TODO:
+		// What if API gives back very short expiration dates to the point where the url
+		// is always expired by the time we get it? It will cause an infinite loop on read.
+		sd, _ := time.ParseDuration("30s")
+		exp := fh.inode.Attributes.ExpirationDate
+		if !exp.IsZero() {
+			twig.Debugf("seems like we have a url that expires: %s", exp)
+			if time.Until(exp) < sd {
+				twig.Debug("url is expired")
+				// Time to hot swap urls!
+				fh.inode.Link = newURL(fh.inode)
+			}
+		}
 
 		bytes := ""
 		if offset != 0 {
@@ -278,6 +293,24 @@ func (fh *FileHandle) readFromStream(offset int64, buf []byte) (bytesRead int, e
 	}
 
 	return
+}
+
+func newURL(inode *Inode) string {
+	payload, err := nr.ResolveNames(inode.fs.flags.Loc, inode.fs.flags.Ngc, []string{inode.Acc})
+	twig.Debug("resolved a url")
+	if err != nil {
+		panic("something went wrong trying to hot swap urls")
+	}
+	for _, p := range payload {
+		for _, f := range p.Files {
+			if f.Name == *inode.Name {
+				twig.Debug("got a new link")
+				return f.Link
+			}
+		}
+	}
+	twig.Debug("did not get a new link")
+	return ""
 }
 
 func (fh *FileHandle) resetToKnownSize() {
