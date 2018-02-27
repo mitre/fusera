@@ -152,7 +152,7 @@ func main() {
 
 		// Populate and parse flags.
 		flags, err = PopulateFlags(c)
-		if flags == nil || err != nil {
+		if err != nil {
 			cli.ShowAppHelp(c)
 			twig.Infof("invalid arguments: %s", err.Error())
 			return
@@ -162,11 +162,11 @@ func main() {
 			flags.Cleanup()
 		}()
 
-		// Evaluate mandatory flags
-		if flags.Acc == nil {
-			twig.Info("fusera expects a list of accessions\n\n")
-			os.Exit(1)
-		}
+		// // Evaluate mandatory flags
+		// if flags.Acc == nil {
+		// 	twig.Info("fusera expects a list of accessions\n\n")
+		// 	os.Exit(1)
+		// }
 		twig.Debugf("accs: %s", flags.Acc)
 
 		if !flags.Foreground {

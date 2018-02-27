@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/mattrbianchi/twig"
+	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 )
 
@@ -151,7 +152,7 @@ func NewApp() (app *cli.App) {
 
 	flagCategories = map[string]string{}
 
-	for _, f := range []string{"help, h", "debug_fuse", "debug_service", "version, v", "f"} {
+	for _, f := range []string{"help, h", "debug", "debug_fuse", "debug_service", "version, v", "f"} {
 		flagCategories[f] = "misc"
 	}
 
@@ -166,10 +167,9 @@ func NewApp() (app *cli.App) {
 
 type FlagStorage struct {
 	// Fusera flags
-	Ngc     string
-	Acc     []string
-	AccFile string
-	Loc     string
+	Ngc []byte
+	Acc map[string]bool
+	Loc string
 	// SRR# has a map of file names that map to urls where the data is
 	Urls map[string]map[string]string
 
@@ -196,29 +196,6 @@ type FlagStorage struct {
 	Foreground bool
 }
 
-func parseOptions(m map[string]string, s string) {
-	// NOTE(jacobsa): The man pages don't define how escaping works, and as far
-	// as I can tell there is no way to properly escape or quote a comma in the
-	// options list for an fstab entry. So put our fingers in our ears and hope
-	// that nobody needs a comma.
-	for _, p := range strings.Split(s, ",") {
-		var name string
-		var value string
-
-		// Split on the first equals sign.
-		if equalsIndex := strings.IndexByte(p, '='); equalsIndex != -1 {
-			name = p[:equalsIndex]
-			value = p[equalsIndex+1:]
-		} else {
-			name = p
-		}
-
-		m[name] = value
-	}
-
-	return
-}
-
 func (flags *FlagStorage) Cleanup() {
 	if flags.MountPointCreated != "" && flags.MountPointCreated != flags.MountPointArg {
 		err := os.Remove(flags.MountPointCreated)
@@ -242,12 +219,7 @@ func reconcileAccs(data []byte) []string {
 func PopulateFlags(c *cli.Context) (ret *FlagStorage, err error) {
 	uid, gid := MyUserAndGroup()
 	flags := &FlagStorage{
-		// Fusera
-		Ngc:     c.String("ngc"),
-		Acc:     strings.Split(c.String("acc"), ","),
-		AccFile: c.String("acc-file"),
-		Loc:     c.String("loc"),
-
+		Acc: make(map[string]bool),
 		// File system
 		MountOptions: make(map[string]string),
 		DirMode:      0755,
@@ -265,18 +237,61 @@ func PopulateFlags(c *cli.Context) (ret *FlagStorage, err error) {
 		DebugS3:    c.Bool("debug_s3"),
 		Foreground: c.Bool("f"),
 	}
-
-	if flags.AccFile != "" {
-		data, err := ioutil.ReadFile(flags.AccFile)
+	ngcpath := c.String("ngc")
+	if ngcpath != "" {
+		// we were given a path to an ngc file. Let's read it.
+		data, err := ioutil.ReadFile(ngcpath)
 		if err != nil {
-			twig.Debugf("ReadFile: %s", err.Error())
-			return nil, err
+			return nil, errors.Wrapf(err, "couldn't open ngc file at: %s", ngcpath)
 		}
-		accs := reconcileAccs(data)
-		for _, s := range accs {
-			flags.Acc = append(flags.Acc, s)
+		flags.Ngc = data
+	}
+	aa := strings.Split(c.String("acc"), ",")
+	if len(aa) > 0 {
+		// append SRRs to actual acc list.
+		for _, a := range aa {
+			flags.Acc[a] = true
 		}
 	}
+	accpath := c.String("acc-file")
+	if accpath != "" {
+		// we were given a path to an acc file. Let's read it and append accs to actual acc list.
+		data, err := ioutil.ReadFile(accpath)
+		if err != nil {
+			return nil, errors.Wrapf(err, "couldn't open acc file at: %s", accpath)
+		}
+		accs := reconcileAccs(data)
+		for _, a := range accs {
+			flags.Acc[a] = true
+		}
+	}
+	if len(aa) == 0 && accpath == "" {
+		return nil, errors.New("must provide at least one accession")
+	}
+	// parseLocation()
+	loc := c.String("loc")
+	// loc = strings.ToLower(loc)
+	if loc == "" {
+		return nil, errors.New("must provide a location")
+	}
+	ll := strings.Split(loc, ".")
+	if len(ll) != 2 {
+		return nil, errors.New("location must be either gs.US or s3.us-east-1")
+	}
+	if ll[0] != "gs" && ll[0] != "s3" {
+		return nil, errors.Errorf("the service %s is not supported, please use gs or s3", ll[0])
+	}
+	if ll[0] == "gs" {
+		if ll[1] != "US" {
+			return nil, errors.Errorf("the region %s isn't supported on gs, only US", ll[1])
+		}
+	}
+	if ll[0] == "s3" {
+		if ll[1] != "us-east-1" {
+			return nil, errors.Errorf("the region %s isn't supported on s3, only us-east-1", ll[1])
+		}
+	}
+	flags.Loc = loc
 
 	flags.MountPointArg = c.Args()[0]
 	flags.MountPoint = flags.MountPointArg

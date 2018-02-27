@@ -18,36 +18,28 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/mattrbianchi/twig"
 	"github.com/pkg/errors"
 )
 
-func ResolveNames(loc string, ngc string, accs []string) ([]Accession, error) {
-	// url := "https://www.ncbi.nlm.nih.gov/Traces/names_test/names.cgi"
-	url := "http://localhost:8000/"
+func ResolveNames(loc string, ngc []byte, accs map[string]bool) ([]Accession, error) {
+	url := "https://www.ncbi.nlm.nih.gov/Traces/names_test/names.cgi"
+	// url := "http://localhost:8000/"
 	// acc := strings.Join(accs, ",")
 	// fmt.Println("accs sent to name resolver: ", acc)
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
-	if ngc != "" {
-		// handle ncg file
-		file, err := os.Open(ngc)
+	if ngc != nil {
+		// handle ngc bytes
+		part, err := writer.CreateFormFile("ngc", "ngc")
 		if err != nil {
-			return nil, errors.Wrapf(err, "couldn't open ngc file at: %s", ngc)
+			return nil, errors.Wrapf(err, "couldn't create form file for ngc")
 		}
-		defer file.Close()
-
-		part, err := writer.CreateFormFile("ngc", filepath.Base(ngc))
+		_, err = io.Copy(part, bytes.NewReader(ngc))
 		if err != nil {
-			return nil, errors.Errorf("couldn't create form file from given ngc file: %s", filepath.Base(ngc))
-		}
-		_, err = io.Copy(part, file)
-		if err != nil {
-			return nil, errors.Errorf("couldn't copy given ngc file: %s into multipart file to make request", ngc)
+			return nil, errors.Errorf("couldn't copy ngc contents: %s into multipart file to make request", ngc)
 		}
 
 	}
@@ -63,7 +55,7 @@ func ResolveNames(loc string, ngc string, accs []string) ([]Accession, error) {
 		}
 	}
 	if accs != nil {
-		for _, acc := range accs {
+		for acc, _ := range accs {
 			if err := writer.WriteField("acc", acc); err != nil {
 				return nil, errors.New("could not write acc field to multipart.Writer")
 			}
@@ -116,18 +108,18 @@ func ResolveNames(loc string, ngc string, accs []string) ([]Accession, error) {
 }
 
 type Accession struct {
-	ID      string `json:"accession"`
-	Status  int    `json:"status"`
+	ID      string `json:"accession,omitempty"`
+	Status  int    `json:"status,omitempty"`
 	Message string `json:"message,omitempty"`
-	Files   []File `json:"files"`
+	Files   []File `json:"files,omitempty"`
 }
 
 type File struct {
-	Name           string    `json:"name"`
-	Size           string    `json:"size"`
-	ModifiedDate   time.Time `json:"modificationDate"`
-	Md5Hash        string    `json:"md5"`
-	Link           string    `json:"link"`
-	ExpirationDate time.Time `json:"expirationDate"`
-	Service        string    `json:"service"`
+	Name           string    `json:"name,omitempty"`
+	Size           string    `json:"size,omitempty"`
+	ModifiedDate   time.Time `json:"modificationDate,omitempty"`
+	Md5Hash        string    `json:"md5,omitempty"`
+	Link           string    `json:"link,omitempty"`
+	ExpirationDate time.Time `json:"expirationDate,omitempty"`
+	Service        string    `json:"service,omitempty"`
 }

@@ -296,7 +296,7 @@ func (fh *FileHandle) readFromStream(offset int64, buf []byte) (bytesRead int, e
 }
 
 func newURL(inode *Inode) string {
-	payload, err := nr.ResolveNames(inode.fs.flags.Loc, inode.fs.flags.Ngc, []string{inode.Acc})
+	payload, err := nr.ResolveNames(inode.fs.flags.Loc, inode.fs.flags.Ngc, map[string]bool{inode.Acc: true})
 	twig.Debug("resolved a url")
 	if err != nil {
 		panic("something went wrong trying to hot swap urls")
