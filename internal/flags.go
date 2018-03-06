@@ -247,10 +247,15 @@ func PopulateFlags(c *cli.Context) (ret *FlagStorage, err error) {
 		flags.Ngc = data
 	}
 	aa := strings.Split(c.String("acc"), ",")
+	if len(aa) == 1 && aa[0] == "" {
+		aa = nil
+	}
 	if len(aa) > 0 {
 		// append SRRs to actual acc list.
 		for _, a := range aa {
-			flags.Acc[a] = true
+			if a != "" {
+				flags.Acc[a] = true
+			}
 		}
 	}
 	accpath := c.String("acc-file")
@@ -262,7 +267,9 @@ func PopulateFlags(c *cli.Context) (ret *FlagStorage, err error) {
 		}
 		accs := reconcileAccs(data)
 		for _, a := range accs {
-			flags.Acc[a] = true
+			if a != "" {
+				flags.Acc[a] = true
+			}
 		}
 	}
 	if len(aa) == 0 && accpath == "" {
