@@ -53,10 +53,6 @@
   branch = "master"
   name = "golang.org/x/net"
 
-[[constraint]]
-  branch = "v1"
-  name = "gopkg.in/check.v1"
-
 [prune]
   go-tests = true
   unused-packages = true

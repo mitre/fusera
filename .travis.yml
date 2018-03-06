@@ -1,13 +1,17 @@
 language: go
 os: osx
 before_deploy:
-  - go build -o fusera-linux-amd64
-  - env GOOS=darwin GOARCH=amd64 go build -o fusera-darwin-amd64
+  - cd $HOME/gopath/src/github.com/mitre/fusera/cmd/fusera
+  - go build -o fusera-darwin-amd64
+  - env GOOS=linux GOARCH=amd64 go build -o fusera-linux-amd64
 deploy:
   provider: releases
   api_key:
     secure: iOD1T0YTF0cTztyQCnJBIYWZIiR8v1NOV43+wxh9H0Mf1f/8Z0JXH2QoNCIKPCA1R7ClFFHOX/Fu5alkjYF/3VyFuYPra1cNbzJTCACpxFsjc+JKwadBmTfNC6/hT7CMggXooJ8g0MBInW8g4EN0e8u2yTqNLqQctzajiHTTBGCpmfXa3Fp6/5+CZ23rCic7/t3lGRCP4Hh964/weonxEV7GnvUbto+zO16u207B6FdeyxcwoJVdH3ZLnFidh+NnC7IYyP0+ZkLwIXPxqRO6wBACQS7VTclcDCSw6pX7zZNnUunwg1XCnrMoZ++mNZlOpnA/z1ro7s1Es3ZGONdSa1ir8zwYfZQFM3R3+We5w19lV+eRHqF9BZ1etGYY/OeMBM9AugQcUuPd+Do7VTr6RQxfWhLzp0v7lf7h51d+MGmBOuh57suWNoRLhmr/WmAq/tbi9ogDi5URcalD++QGTIIqiuUwG6kLlmeFEbiYv8OwC97FhEvRLy0P/wp8UGeVn0Ng0xyz96CAtyaVkHGPqNzqYSbJCI7e/rknl/h1uQ2R6n1M54Eobt2Wo8PJZug7SynB97wfPLz2YC5+1mdXlR98mx2Tpoo/UJRKJtpjvtKo678pwdZjwYrJ9jN3ZMjKgv3b6/OZBmCMjgEG1To+K7cjdS39xeyACUAnQgYOoP8=
   skip_cleanup: true
+  overwrite: true
   file:
-    - fusera-linux-amd64
-    - fusera-darwin-amd64
+    - $HOME/gopath/src/github.com/mitre/fusera/cmd/fusera/fusera-linux-amd64
+    - $HOME/gopath/src/github.com/mitre/fusera/cmd/fusera/fusera-darwin-amd64
+  on:
+    tags: true
