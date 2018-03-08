@@ -29,6 +29,7 @@ import (
 	"github.com/mattrbianchi/twig"
 	"github.com/mitre/fusera"
 	"github.com/mitre/fusera/log"
+	"github.com/pkg/errors"
 
 	"github.com/jacobsa/fuse"
 	"github.com/kardianos/osext"
@@ -168,7 +169,7 @@ func main() {
 	app.Action = func(c *cli.Context) (err error) {
 		// We should get one argument exactly. Otherwise error out.
 		if len(c.Args()) != 1 {
-			twig.Infof("Error: %s takes exactly one argument.\n\n", app.Name)
+			fmt.Printf("\n%s takes exactly one argument.\n\n", app.Name)
 			cli.ShowAppHelp(c)
 			os.Exit(1)
 		}
@@ -176,8 +177,14 @@ func main() {
 		// Populate and parse flags.
 		flags, err = PopulateFlags(c)
 		if err != nil {
+			cause := errors.Cause(err)
+			if os.IsPermission(cause) {
+				fmt.Print("\nSeems like fusera doesn't have permissions to read a file!")
+				fmt.Printf("\nTry changing the permissions with chmod +r path/to/file\n")
+			}
+			fmt.Printf("\ninvalid arguments: %s\n\n", errors.Cause(err))
+			twig.Debugf("%+#v", err.Error())
 			cli.ShowAppHelp(c)
-			twig.Infof("invalid arguments: %s", err.Error())
 			return
 		}
 		defer func() {
