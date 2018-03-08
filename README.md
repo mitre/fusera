@@ -3,6 +3,10 @@
 Fusera
 ===
 
+Fusera (FUSE for SRA) is a FUSE implementation for the cloud extension to the NCBI Sequence Read Archive (SRA).  SRA accepts data from all kinds of sequencing projects including clinically important studies that involve human subjects or their metagenomes, which may contain human sequences. These data often have a controlled access via dbGaP (the database of Genotypes and Phenotypes) .  The SRA provides access to cloud-hosted data through a web-services API (documented here) that provides signedURL access to data objects.   Fusera presents selected SRA data elements as a read-only file system, enabling users and tools to access the data through a file system interface.   The related sracp tool (reference) provides a convenient interface for copying the data to a mounted file system within a virtual machine.  These tools are intended for deployment on linux.
+
+Fundamentally, Fusera presents all of the cloud-hosted SRA data for a set of SRA Accession numbers as a mounted directory, with one subdirectory per SRA Accession number.  The user’s credentials are passed through a dbGaP repository key, or ngc file,  that is obtained from dbGaP.  Fusera relies on the SRA’s Nameservice API (reference) which may limit the ability of fusera to ‘see’ certain data sets based on the location where the fusera service is deployed with the aim of limiting charges for data egress.
+
 Installation
 ---
 
@@ -42,18 +46,54 @@ $ go install github.com/mitre/fusera/cmd/fusera
 Usage
 ---
 
-A simple run of Fusera:
-```ShellSession
-$ fusera --acc [comma separated list of SRR#s] --loc [s3.us-east-1|gs.US] <mountpoint>
+Access the help with `fusera -h`:
+
+```
+NAME:
+   fusera - 
+
+USAGE:
+   fusera [global options] mountpoint
+   
+VERSION:
+   0.0.-beta
+   
+GLOBAL OPTIONS:
+   --ngc value       path to an ngc file that contains authentication info.
+   --acc value       comma separated list of SRR#s that are to be mounted.
+   --acc-file value  path to file with comma or space separated list of SRR#s that are to be mounted.
+   --loc value       preferred region.
+   
+MISC OPTIONS:
+   --help, -h       Print this help text and exit successfully.
+   --debug          Enable debugging output.
+   --debug_fuse     Enable fuse-related debugging output.
+   --debug_service  Enable service-related debugging output.
+   -f               Run fusera in foreground.
+   --version, -v    print the version
 ```
 
-It's important to note that currently, the `<mountpoint>` needs to already exist, be empty, and the user running fusera must have all permissions on that folder.
+A simple run of Fusera:
+```ShellSession
+$ fusera --ngc [path/to/ngcfile] --acc [comma separated list of SRR#s] --loc [s3.us-east-1|gs.US] <mountpoint>
+```
 
-It is ill-advised to use a folder that is outside the user's directory, such as /mnt, /tmp, etc. These folders tend to be owned by `root` anyway but have special uses in unix systems and may cause problems.
+The `<mountpoint>` must be an existing, empty directory, to which the user has read and write permissions.
 
-Because of the nature of fuse systems, only the user who ran Fusera will be able to read the files mounted. This can be changed by editing a certain config file on the machine to `allow_others`, but be warned that there are security implications to be considered: https://github.com/libfuse/libfuse#security-implications.
+It is recommended that the mountpoint be a directory owned by the user. Creating the mountpoint in system directories such as `/mnt`, `/tmp` have special uses in unix systems and should be avoided.
 
-When needing to use many accesions at once, one may be interested in the `--acc-file` flag. Fusera expects this file to be either comma or space separated. If the `--acc-file` and `--acc` flag are both used, a union of the two will be used without duplicates.
+Because of the nature of FUSE systems, only the user who ran fusera will be able to read the files mounted. This can be changed by editing a config file (reference) on the machine to allow_others, but be warned that there are security implications to be considered: https://github.com/libfuse/libfuse#security-implications.
+
+Accessions can be specified through the commmand line using the `--acc flag`, or, by reference to a file with space or comma separated accessions using the `--acc-file` option.   The union of these two sets of accessions is used to build the FUSE file system, with duplicates eliminated.
+
+Troubleshooting
+---
+
+If you cannot successfully run fusera, first check that you have access to the SRA Nameservice API by invoking:
+```
+curl -X POST "https://www.ncbi.nlm.nih.gov/Traces/names_test/names.cgi?acc=1601726&version=xc-1.0&location=s3.us-east-1"
+```
+If this command has issues, contact your network administrator to resolve network/proxy issues.
 
 License
 ---
