@@ -17,6 +17,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
@@ -24,8 +25,6 @@ import (
 	"sync"
 	"syscall"
 	"time"
-
-	"golang.org/x/net/context"
 
 	"github.com/mattrbianchi/twig"
 	"github.com/mitre/fusera"
