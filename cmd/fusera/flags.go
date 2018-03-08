@@ -82,7 +82,7 @@ func NewApp() (app *cli.App) {
 	app = &cli.App{
 		Name:     "fusera",
 		Version:  "0.0.-" + VersionHash,
-		Usage:    "",
+		Usage:    "A FUSE interface to the NCBI Sequence Read Archive (SRA)",
 		HideHelp: true,
 		Writer:   os.Stderr,
 		Flags: []cli.Flag{
@@ -275,13 +275,13 @@ func PopulateFlags(c *cli.Context) (ret *Flags, err error) {
 		}
 	}
 	if len(aa) == 0 && accpath == "" {
-		return nil, errors.New("must provide at least one accession")
+		return nil, errors.New("must provide at least one accession number")
 	}
 	// parseLocation()
 	loc := c.String("loc")
 	// loc = strings.ToLower(loc)
 	if loc == "" {
-		return nil, errors.New("must provide a location")
+		return nil, errors.New("must provide a location of either s3.us-east-1 or gs.US")
 	}
 	ll := strings.Split(loc, ".")
 	if len(ll) != 2 {
