@@ -3,9 +3,9 @@
 Fusera
 ===
 
-Fusera (FUSE for SRA) is a FUSE implementation for the cloud extension to the NCBI Sequence Read Archive (SRA).  SRA accepts data from all kinds of sequencing projects including clinically important studies that involve human subjects or their metagenomes, which may contain human sequences. These data often have a controlled access via dbGaP (the database of Genotypes and Phenotypes) .  The SRA provides access to cloud-hosted data through a web-services API (documented here) that provides signedURL access to data objects.   Fusera presents selected SRA data elements as a read-only file system, enabling users and tools to access the data through a file system interface.   The related sracp tool (reference) provides a convenient interface for copying the data to a mounted file system within a virtual machine.  These tools are intended for deployment on linux.
+Fusera (FUSE for SRA) is a [FUSE](https://en.wikipedia.org/wiki/Filesystem_in_Userspace) implementation for the cloud extension to the [NCBI Sequence Read Archive (SRA)](https://www.ncbi.nlm.nih.gov/sra). SRA accepts data from all kinds of sequencing projects including clinically important studies that involve human subjects or their metagenomes, which may contain human sequences. These data often have a controlled access via [dbGaP (the database of Genotypes and Phenotypes)](https://www.ncbi.nlm.nih.gov/gap/). The SRA provides access to cloud-hosted data through a web-services API (documented here) that provides signedURL access to data objects. Fusera presents selected SRA data elements as a read-only file system, enabling users and tools to access the data through a file system interface. The related sracp tool (reference) provides a convenient interface for copying the data to a mounted file system within a virtual machine. These tools are intended for deployment on linux.
 
-Fundamentally, Fusera presents all of the cloud-hosted SRA data for a set of SRA Accession numbers as a mounted directory, with one subdirectory per SRA Accession number.  The user’s credentials are passed through a dbGaP repository key, or ngc file,  that is obtained from dbGaP.  Fusera relies on the SRA’s Nameservice API (reference) which may limit the ability of fusera to ‘see’ certain data sets based on the location where the fusera service is deployed with the aim of limiting charges for data egress.
+Fundamentally, Fusera presents all of the cloud-hosted SRA data for a set of SRA Accession numbers as a mounted directory, with one subdirectory per SRA Accession number. The user’s credentials are passed through a [dbGaP repository key](https://www.ncbi.nlm.nih.gov/books/NBK63512/), or ngc file, that is obtained from dbGaP. Fusera relies on the SRA’s Nameservice API (reference) which may limit the ability of fusera to ‘see’ certain data sets based on the location where the fusera service is deployed with the aim of limiting charges for data egress.
 
 Installation
 ---
@@ -91,7 +91,7 @@ Troubleshooting
 
 If you cannot successfully run fusera, first check that you have access to the SRA Nameservice API by invoking:
 ```
-curl -X POST "https://www.ncbi.nlm.nih.gov/Traces/names_test/names.cgi?acc=1601726&version=xc-1.0&location=s3.us-east-1"
+curl -X POST "https://www.ncbi.nlm.nih.gov/Traces/names_test/names.fcgi?acc=SRR1601726&version=xc-1.0&location=s3.us-east-1"
 ```
 If this command has issues, contact your network administrator to resolve network/proxy issues.
 
