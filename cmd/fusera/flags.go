@@ -215,8 +215,8 @@ func PopulateFlags(c *cli.Context) (ret *Flags, err error) {
 		Acc: make(map[string]bool),
 		// File system
 		MountOptions: make(map[string]string),
-		DirMode:      0755,
-		FileMode:     0644,
+		DirMode:      0555,
+		FileMode:     0444,
 		Uid:          uint32(uid),
 		Gid:          uint32(gid),
 
@@ -436,7 +436,7 @@ func reconcileAccs(data []byte) []string {
 
 func vetAccs(accs []string) []string {
 	aa := make([]string, 0, len(accs))
-	for _, a := range(accs) {
+	for _, a := range accs {
 		if !strings.Contains(a, "SRR") ||
 			strings.Contains(a, " ") ||
 			strings.Contains(a, ",") ||
