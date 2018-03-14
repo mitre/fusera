@@ -4,6 +4,9 @@ before_deploy:
   - cd $HOME/gopath/src/github.com/mitre/fusera/cmd/fusera
   - go build -o fusera-darwin-amd64
   - env GOOS=linux GOARCH=amd64 go build -o fusera-linux-amd64
+  - cd $HOME/gopath/src/github.com/mitre/fusera/cmd/sracp
+  - go build -o sracp-darwin-amd64
+  - env GOOS=linux GOARCH=amd64 go build -o sracp-linux-amd64
 deploy:
   provider: releases
   api_key:
@@ -13,5 +16,7 @@ deploy:
   file:
     - $HOME/gopath/src/github.com/mitre/fusera/cmd/fusera/fusera-linux-amd64
     - $HOME/gopath/src/github.com/mitre/fusera/cmd/fusera/fusera-darwin-amd64
+    - $HOME/gopath/src/github.com/mitre/fusera/cmd/sracp/sracp-linux-amd64
+    - $HOME/gopath/src/github.com/mitre/fusera/cmd/sracp/sracp-darwin-amd64
   on:
     tags: true
