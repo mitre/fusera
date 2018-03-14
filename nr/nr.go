@@ -131,6 +131,10 @@ func sanitize(payload []Payload) map[string]Accession {
 				twig.Infof("API returned no link for %s", f.Name)
 				continue
 			}
+			if f.Name == "" {
+				twig.Infof("API returned no name for file: %s", f)
+				continue
+			}
 			acc.Files[f.Name] = f
 		}
 		// finally finished with acc
