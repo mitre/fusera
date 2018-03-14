@@ -207,15 +207,6 @@ func (f *Flags) Cleanup() {
 	}
 }
 
-func reconcileAccs(data []byte) []string {
-	accs_csv := strings.Split(string(data), ",")
-	if len(accs_csv) != 1 {
-		return accs_csv
-	}
-	accs_tsv := strings.Split(string(data), " ")
-	return accs_tsv
-}
-
 // Add the flags accepted by run to the supplied flag set, returning the
 // variables into which the flags will parse.
 func PopulateFlags(c *cli.Context) (ret *Flags, err error) {
@@ -428,4 +419,31 @@ func MyUserAndGroup() (uid int, gid int) {
 	gid = int(gid64)
 
 	return
+}
+
+func reconcileAccs(data []byte) []string {
+	accs := strings.Split(string(data), ",")
+	if len(accs) != 1 {
+		return accs
+	}
+	accs = strings.Split(string(data), " ")
+	if len(accs) != 1 {
+		return accs
+	}
+	accs = strings.Split(string(data), "\n")
+	return vetAccs(accs)
+}
+
+func vetAccs(accs []string) []string {
+	aa := make([]string, 0, len(accs))
+	for _, a := range(accs) {
+		if !strings.Contains(a, "SRR") ||
+			strings.Contains(a, " ") ||
+			strings.Contains(a, ",") ||
+			strings.Contains(a, "\n") {
+			continue
+		}
+		aa = append(aa, a)
+	}
+	return aa
 }
