@@ -279,19 +279,28 @@ func (fs *Fusera) getInodeOrDie(id fuseops.InodeID) (inode *Inode) {
 }
 
 func (fs *Fusera) StatFS(ctx context.Context, op *fuseops.StatFSOp) (err error) {
-	//fmt.Println("sddp.go/StatFS called")
-
+	var total_space uint64
+	for _, a := range fs.accs {
+		for _, f := range a.Files {
+			s, err := strconv.ParseUint(f.Size, 10, 64)
+			if err != nil {
+				total_space = 1024 * 1024 * 1024
+				goto skip
+			}
+			total_space += s
+		}
+	}
+skip:
 	const BLOCK_SIZE = 4096
-	const TOTAL_SPACE = 1 * 1024 * 1024 * 1024 * 1024 * 1024 // 1PB
-	const TOTAL_BLOCKS = TOTAL_SPACE / BLOCK_SIZE
+	total_blocks := total_space / BLOCK_SIZE
 	const INODES = 1 * 1000 * 1000 * 1000 // 1 billion
 	op.BlockSize = BLOCK_SIZE
-	op.Blocks = TOTAL_BLOCKS
-	op.BlocksFree = TOTAL_BLOCKS
-	op.BlocksAvailable = TOTAL_BLOCKS
+	op.Blocks = total_blocks
+	op.BlocksFree = 0
+	op.BlocksAvailable = 0
 	op.IoSize = 1 * 1024 * 1024 // 1MB
 	op.Inodes = INODES
-	op.InodesFree = INODES
+	op.InodesFree = 0
 	return
 }
 
