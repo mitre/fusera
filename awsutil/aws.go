@@ -1,3 +1,5 @@
+// Copyright 2018 The MITRE Corporation
+// Author Matthew Bianchi
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -12,7 +14,14 @@
 
 package awsutil
 
-import "net/http"
+import (
+	"io"
+	"net/http"
+	"syscall"
+
+	"github.com/jacobsa/fuse"
+	"github.com/mattrbianchi/twig"
+)
 
 // Makes an http HEAD request using the URL provided.
 // URL should either point to a public obejct or be
@@ -61,7 +70,35 @@ func GetObjectRange(url, byteRange string) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
+	if resp.StatusCode != http.StatusPartialContent && resp.StatusCode != http.StatusOK {
+		twig.Debugf("status code: %d\n", resp.StatusCode)
+		return nil, parseHTTPError(resp.StatusCode)
+	}
 	return resp, nil
+}
+
+func parseHTTPError(code int) error {
+	switch code {
+	case 400:
+		twig.Debug("converting to EINVAL")
+		return fuse.EINVAL
+	case 403:
+		twig.Debug("converting to EACCES")
+		return syscall.EACCES
+	case 404:
+		twig.Debug("converting to ENOENT")
+		return fuse.ENOENT
+	case 405:
+		twig.Debug("converting to ENOTSUP")
+		return syscall.ENOTSUP
+	case 500:
+		twig.Debug("converting to EAGAIN")
+		return syscall.EAGAIN
+	default:
+		// TODO: log this and re-evaluate whether this is a good move.
+		twig.Debug("converting to EOF")
+		return io.EOF
+	}
 }
 
 func String(s string) *string {
