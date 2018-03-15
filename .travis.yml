@@ -1,9 +1,5 @@
 language: go
 os: osx
-branches:
-  only:
-    - master
-    - develop
 before_deploy:
   - cd $HOME/gopath/src/github.com/mitre/fusera/cmd/fusera
   - go build -o fusera-darwin-amd64
