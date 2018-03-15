@@ -25,7 +25,7 @@ import (
 )
 
 func ResolveNames(loc string, ngc []byte, accs map[string]bool) (map[string]Accession, error) {
-	url := "https://www.ncbi.nlm.nih.gov/Traces/names_test/names.cgi"
+	url := "https://www.ncbi.nlm.nih.gov/Traces/names/names.cgi"
 	// url := "http://localhost:8000/"
 	// acc := strings.Join(accs, ",")
 	// fmt.Println("accs sent to name resolver: ", acc)
