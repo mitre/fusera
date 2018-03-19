@@ -97,20 +97,24 @@ func NewApp() (app *cli.App) {
 			/////////////////////////
 
 			cli.StringFlag{
-				Name:  "ngc",
-				Usage: "path to an ngc file that contains authentication info.",
+				Name:   "ngc",
+				Usage:  "path to an ngc file that contains authentication info.",
+				EnvVar: "DBGAP_CREDENTIALS,FUSERA_NGCFILE,FUSERA_CREDENTIALS",
 			},
 			cli.StringFlag{
-				Name:  "acc",
-				Usage: "comma separated list of SRR#s that are to be mounted.",
+				Name:   "acc",
+				Usage:  "comma separated list of SRR#s that are to be mounted.",
+				EnvVar: "DBGAP_ACC,FUSERA_ACC",
 			},
 			cli.StringFlag{
-				Name:  "acc-file",
-				Usage: "path to file with comma or space separated list of SRR#s that are to be mounted.",
+				Name:   "acc-file",
+				Usage:  "path to file with comma or space separated list of SRR#s that are to be mounted.",
+				EnvVar: "DBGAP_ACCFILE,FUSERA_ACCFILE",
 			},
 			cli.StringFlag{
-				Name:  "loc",
-				Usage: "preferred region.",
+				Name:   "loc",
+				Usage:  "preferred region.",
+				EnvVar: "DBGAP_LOC,FUSERA_LOC",
 			},
 
 			/////////////////////////
@@ -133,14 +137,6 @@ func NewApp() (app *cli.App) {
 				Usage: "Enable debugging output.",
 			},
 			cli.BoolFlag{
-				Name:  "debug_fuse",
-				Usage: "Enable fuse-related debugging output.",
-			},
-			cli.BoolFlag{
-				Name:  "debug_service",
-				Usage: "Enable service-related debugging output.",
-			},
-			cli.BoolFlag{
 				Name:  "f",
 				Usage: "Run fusera in foreground.",
 			},
@@ -154,7 +150,7 @@ func NewApp() (app *cli.App) {
 
 	flagCategories = map[string]string{}
 
-	for _, f := range []string{"help, h", "debug", "debug_fuse", "debug_service", "version, v", "f"} {
+	for _, f := range []string{"help, h", "debug", "version, v", "f"} {
 		flagCategories[f] = "misc"
 	}
 
