@@ -22,7 +22,6 @@ import (
 
 	"github.com/mattrbianchi/twig"
 	"github.com/mitre/fusera/awsutil"
-	"github.com/mitre/fusera/log"
 
 	"github.com/jacobsa/fuse"
 	"github.com/jacobsa/fuse/fuseops"
@@ -65,9 +64,6 @@ func NewDirHandle(inode *Inode) (dh *DirHandle) {
 }
 
 func (inode *Inode) OpenDir() (dh *DirHandle) {
-	twig.Debug("dir.go/OpenDir called")
-	inode.logFuse("OpenDir")
-
 	parent := inode.Parent
 	if parent != nil && inode.fs.opt.TypeCacheTTL != 0 {
 		parent.mu.Lock()
@@ -83,6 +79,7 @@ func (inode *Inode) OpenDir() (dh *DirHandle) {
 			// ie: handle the depth first search case
 			if parent.dir.seqOpenDirScore >= 2 {
 				// TODO: change to other log
+				twig.Debugf("%v in readdir mode", *parent.FullName())
 				// fuseLog.Debugf("%v in readdir mode", *parent.FullName())
 			}
 		} else if parent.dir.lastOpenDir != nil && parent.dir.lastOpenDirIdx+1 < num &&
@@ -98,6 +95,7 @@ func (inode *Inode) OpenDir() (dh *DirHandle) {
 			parent.dir.lastOpenDirIdx += 1
 			if parent.dir.seqOpenDirScore == 2 {
 				//TODO: change to other log
+				twig.Debugf("%v in readdir mode", *parent.FullName())
 				//fuseLog.Debugf("%v in readdir mode", *parent.FullName())
 			}
 		} else {
@@ -117,7 +115,8 @@ func (inode *Inode) OpenDir() (dh *DirHandle) {
 			// so make a/'s count at 1 too
 			inode.dir.seqOpenDirScore = parent.dir.seqOpenDirScore
 			if inode.dir.seqOpenDirScore >= 2 {
-				log.FuseLog.Debugf("%v in readdir mode", *inode.FullName())
+				twig.Debugf("%v in readdir mode", *inode.FullName())
+				// log.FuseLog.Debugf("%v in readdir mode", *inode.FullName())
 			}
 		}
 	}

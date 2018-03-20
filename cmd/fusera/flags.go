@@ -18,21 +18,17 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/user"
 	"strconv"
 	"strings"
 	"text/tabwriter"
 	"text/template"
-	"time"
 
 	"github.com/mattrbianchi/twig"
-	"github.com/mitre/fusera/log"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 )
@@ -88,16 +84,10 @@ func NewApp() (app *cli.App) {
 		HideHelp: true,
 		Writer:   os.Stderr,
 		Flags: []cli.Flag{
-
 			cli.BoolFlag{
 				Name:  "help, h",
 				Usage: "Print this help text and exit successfully.",
 			},
-
-			/////////////////////////
-			// Fusera
-			/////////////////////////
-
 			cli.StringFlag{
 				Name:   "ngc",
 				Usage:  "path to an ngc file that contains authentication info.",
@@ -118,29 +108,9 @@ func NewApp() (app *cli.App) {
 				Usage:  "preferred region.",
 				EnvVar: "DBGAP_LOC,FUSERA_LOC",
 			},
-
-			/////////////////////////
-			// File system
-			/////////////////////////
-
-			// cli.StringFlag{
-			// 	Name: "cache",
-			// 	Usage: "Directory to use for data cache. " +
-			// 		"Requires catfs and `-o allow_other'. " +
-			// 		"Can also pass in other catfs options " +
-			// 		"(ex: --cache \"--free:10%:$HOME/cache\") (default: off)",
-			// },
-
-			/////////////////////////
-			// Debugging
-			/////////////////////////
 			cli.BoolFlag{
 				Name:  "debug",
 				Usage: "Enable debugging output.",
-			},
-			cli.BoolFlag{
-				Name:  "f",
-				Usage: "Run fusera in foreground.",
 			},
 		},
 	}
@@ -152,7 +122,7 @@ func NewApp() (app *cli.App) {
 
 	flagCategories = map[string]string{}
 
-	for _, f := range []string{"help, h", "debug", "version, v", "f"} {
+	for _, f := range []string{"help, h", "debug", "version, v"} {
 		flagCategories[f] = "misc"
 	}
 
@@ -166,41 +136,29 @@ func NewApp() (app *cli.App) {
 }
 
 type Flags struct {
-	// Fusera flags
-	Ngc []byte
-	Acc map[string]bool
-	Loc string
-	// SRR# has a map of file names that map to urls where the data is
-	Urls map[string]map[string]string
+	Ngc  []byte
+	Acc  map[string]bool
+	Loc  string
+	Path string
 
-	// File system
 	MountOptions      map[string]string
 	MountPoint        string
 	MountPointArg     string
 	MountPointCreated string
 
-	Cache    []string
 	DirMode  os.FileMode
 	FileMode os.FileMode
 	Uid      uint32
 	Gid      uint32
 
-	// Tuning
-	StatCacheTTL time.Duration
-	TypeCacheTTL time.Duration
-
-	// Debugging
-	Debug      bool
-	DebugFuse  bool
-	DebugS3    bool
-	Foreground bool
+	Debug bool
 }
 
 func (f *Flags) Cleanup() {
 	if f.MountPointCreated != "" && f.MountPointCreated != f.MountPointArg {
 		err := os.Remove(f.MountPointCreated)
 		if err != nil {
-			mainLog.Errorf("rmdir %v = %v", f.MountPointCreated, err)
+			twig.Debugf("rmdir %v = %v", f.MountPointCreated, err)
 		}
 	}
 }
@@ -208,6 +166,9 @@ func (f *Flags) Cleanup() {
 // Add the flags accepted by run to the supplied flag set, returning the
 // variables into which the flags will parse.
 func PopulateFlags(c *cli.Context) (ret *Flags, err error) {
+	if len(c.Args()) != 1 {
+		return nil, errors.New("must give a path to a folder to mount")
+	}
 	uid, gid := MyUserAndGroup()
 	f := &Flags{
 		Acc: make(map[string]bool),
@@ -218,15 +179,8 @@ func PopulateFlags(c *cli.Context) (ret *Flags, err error) {
 		Uid:          uint32(uid),
 		Gid:          uint32(gid),
 
-		// Tuning,
-		StatCacheTTL: time.Hour * 24 * 365 * 7,
-		TypeCacheTTL: time.Hour * 24 * 365 * 7,
-
 		// Debugging,
-		Debug:      c.Bool("debug"),
-		DebugFuse:  c.Bool("debug_fuse"),
-		DebugS3:    c.Bool("debug_s3"),
-		Foreground: c.Bool("f"),
+		Debug: c.Bool("debug"),
 	}
 	ngcpath := c.String("ngc")
 	if ngcpath != "" {
@@ -323,61 +277,6 @@ func PopulateFlags(c *cli.Context) (ret *Flags, err error) {
 		}
 	}()
 
-	if c.IsSet("cache") {
-		cache := c.String("cache")
-		cacheArgs := strings.Split(c.String("cache"), ":")
-		cacheDir := cacheArgs[len(cacheArgs)-1]
-		cacheArgs = cacheArgs[:len(cacheArgs)-1]
-
-		fi, err := os.Stat(cacheDir)
-		if err != nil || !fi.IsDir() {
-			io.WriteString(cli.ErrWriter,
-				fmt.Sprintf("Invalid value \"%v\" for --cache: not a directory\n\n",
-					cacheDir))
-			return nil, nil
-		}
-
-		if _, ok := f.MountOptions["allow_other"]; !ok {
-			f.MountPointCreated, err = ioutil.TempDir("", ".goofys-mnt")
-			if err != nil {
-				io.WriteString(cli.ErrWriter,
-					fmt.Sprintf("Unable to create temp dir: %v", err))
-				return nil, nil
-			}
-			f.MountPoint = f.MountPointCreated
-		}
-
-		cacheArgs = append([]string{"--test"}, cacheArgs...)
-
-		if f.MountPointArg == f.MountPoint {
-			cacheArgs = append(cacheArgs, "-ononempty")
-		}
-
-		cacheArgs = append(cacheArgs, "--")
-		cacheArgs = append(cacheArgs, f.MountPoint)
-		cacheArgs = append(cacheArgs, cacheDir)
-		cacheArgs = append(cacheArgs, f.MountPointArg)
-
-		log.FuseLog.Debugf("catfs %v", cacheArgs)
-		catfs := exec.Command("catfs", cacheArgs...)
-		_, err = catfs.Output()
-		if err != nil {
-			if ee, ok := err.(*exec.Error); ok {
-				io.WriteString(cli.ErrWriter,
-					fmt.Sprintf("--cache requires catfs (%v) but %v\n\n",
-						"http://github.com/kahing/catfs",
-						ee.Error()))
-			} else if ee, ok := err.(*exec.ExitError); ok {
-				io.WriteString(cli.ErrWriter,
-					fmt.Sprintf("Invalid value \"%v\" for --cache: %v\n\n",
-						cache, string(ee.Stderr)))
-			}
-			return nil, nil
-		}
-
-		f.Cache = cacheArgs[1:]
-	}
-
 	return f, nil
 }
 
@@ -412,32 +311,20 @@ func MassageMountFlags(args []string) (ret []string) {
 	return
 }
 
-// Return the UID and GID of this process.
-func MyUserAndGroup() (uid int, gid int) {
-	// Ask for the current user.
+func MyUserAndGroup() (int, int) {
 	user, err := user.Current()
 	if err != nil {
 		panic(err)
 	}
-
-	// Parse UID.
 	uid64, err := strconv.ParseInt(user.Uid, 10, 32)
 	if err != nil {
-		mainLog.Fatalf("Parsing UID (%s): %v", user.Uid, err)
-		return
+		panic(errors.Wrapf(err, "Parsing UID (%s)", user.Uid))
 	}
-
-	// Parse GID.
 	gid64, err := strconv.ParseInt(user.Gid, 10, 32)
 	if err != nil {
-		mainLog.Fatalf("Parsing GID (%s): %v", user.Gid, err)
-		return
+		panic(errors.Wrapf(err, "Parsing GID (%s)", user.Gid))
 	}
-
-	uid = int(uid64)
-	gid = int(gid64)
-
-	return
+	return int(uid64), int(gid64)
 }
 
 func reconcileAccs(data []byte) []string {

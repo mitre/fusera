@@ -29,11 +29,8 @@ import (
 
 	"github.com/mattrbianchi/twig"
 	"github.com/mitre/fusera/awsutil"
-	"github.com/mitre/fusera/log"
 	"github.com/mitre/fusera/nr"
 	"github.com/pkg/errors"
-
-	"github.com/sirupsen/logrus"
 
 	"github.com/jacobsa/fuse"
 	"github.com/jacobsa/fuse/fuseops"
@@ -79,16 +76,9 @@ func Mount(ctx context.Context, opt *Options) (*Fusera, *fuse.MountedFileSystem,
 		return nil, nil, errors.New("Mount: initialization failed")
 	}
 	s := fuseutil.NewFileSystemServer(fs)
-	fuseLog := log.GetLogger("fuse")
 	mntConfig := &fuse.MountConfig{
 		FSName:                  "fusera",
-		ErrorLogger:             log.GetStdLogger(log.NewLogger("fuse"), logrus.ErrorLevel),
 		DisableWritebackCaching: true,
-	}
-	if opt.DebugFuse {
-		fuseLog.Level = logrus.DebugLevel
-		log.Log.Level = logrus.DebugLevel
-		mntConfig.DebugLogger = log.GetStdLogger(fuseLog, logrus.DebugLevel)
 	}
 	mfs, err := fuse.Mount(opt.MountPoint, s, mntConfig)
 	if err != nil {
@@ -107,11 +97,6 @@ func NewFusera(ctx context.Context, opt *Options) (*Fusera, error) {
 		opt:   opt,
 		umask: 0122,
 	}
-
-	// if opt.DebugS3 {
-	// 	awsConfig.LogLevel = aws.LogLevel(aws.LogDebug | aws.LogDebugWithRequestErrors)
-	// 	s3Log.Level = logrus.DebugLevel
-	// }
 
 	now := time.Now()
 	fs.rootAttrs = InodeAttributes{
@@ -372,13 +357,9 @@ func (fs *Fusera) ListXattr(ctx context.Context, op *fuseops.ListXattrOp) (err e
 }
 
 func (fs *Fusera) LookUpInode(ctx context.Context, op *fuseops.LookUpInodeOp) (err error) {
-	//fmt.Println("sddp.go/LookUpInode called with:")
-	//fmt.Println("op.Parent: ", op.Parent)
-	//fmt.Println("op.Name: ", op.Name)
-
 	var inode *Inode
 	var ok bool
-	defer func() { log.FuseLog.Debugf("<-- LookUpInode %v %v %v", op.Parent, op.Name, err) }()
+	// defer func() { log.FuseLog.Debugf("<-- LookUpInode %v %v %v", op.Parent, op.Name, err) }()
 
 	fs.mu.Lock()
 	parent := fs.getInodeOrDie(op.Parent)
@@ -514,7 +495,7 @@ func (fs *Fusera) ReadDir(ctx context.Context, op *fuseops.ReadDirOp) (err error
 	}
 
 	inode := dh.inode
-	inode.logFuse("ReadDir", op.Offset)
+	// inode.logFuse("ReadDir", op.Offset)
 
 	dh.mu.Lock()
 	defer dh.mu.Unlock()
@@ -546,7 +527,7 @@ func (fs *Fusera) ReadDir(ctx context.Context, op *fuseops.ReadDirOp) (err error
 			break
 		}
 
-		dh.inode.logFuse("<-- ReadDir", *e.Name, e.Offset)
+		// dh.inode.logFuse("<-- ReadDir", *e.Name, e.Offset)
 
 		op.BytesRead += n
 	}
@@ -563,7 +544,7 @@ func (fs *Fusera) ReleaseDirHandle(ctx context.Context, op *fuseops.ReleaseDirHa
 	dh := fs.dirHandles[op.Handle]
 	dh.CloseDir()
 
-	log.FuseLog.Debugln("ReleaseDirHandle", *dh.inode.FullName())
+	// log.FuseLog.Debugln("ReleaseDirHandle", *dh.inode.FullName())
 
 	delete(fs.dirHandles, op.Handle)
 
@@ -622,7 +603,7 @@ func (fs *Fusera) ReleaseFileHandle(ctx context.Context, op *fuseops.ReleaseFile
 	fh := fs.fileHandles[op.Handle]
 	fh.Release()
 
-	log.FuseLog.Debugln("ReleaseFileHandle", *fh.inode.FullName())
+	// log.FuseLog.Debugln("ReleaseFileHandle", *fh.inode.FullName())
 
 	delete(fs.fileHandles, op.Handle)
 

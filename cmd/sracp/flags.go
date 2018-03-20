@@ -17,8 +17,10 @@
 package main
 
 import (
+	"encoding/json"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -74,42 +76,36 @@ var VersionHash string
 func NewApp() (app *cli.App) {
 
 	app = &cli.App{
-		Name:     "sracopy",
+		Name:     "sracp",
 		Version:  "0.0.-" + VersionHash,
 		Usage:    "",
 		HideHelp: true,
 		Writer:   os.Stderr,
 		Flags: []cli.Flag{
-
 			cli.BoolFlag{
 				Name:  "help, h",
 				Usage: "Print this help text and exit successfully.",
 			},
-
-			/////////////////////////
-			// Fusera
-			/////////////////////////
-
 			cli.StringFlag{
-				Name:  "ngc",
-				Usage: "path to an ngc file that contains authentication info.",
+				Name:   "ngc",
+				Usage:  "path to an ngc file that contains authentication info.",
+				EnvVar: "DBGAP_CREDENTIALS,SRACP_NGCFILE,SRACP_CREDENTIALS",
 			},
 			cli.StringFlag{
-				Name:  "acc",
-				Usage: "comma separated list of SRR#s that are to be mounted.",
+				Name:   "acc",
+				Usage:  "comma separated list of SRR#s that are to be mounted.",
+				EnvVar: "DBGAP_ACC,SRACP_ACC",
 			},
 			cli.StringFlag{
-				Name:  "acc-file",
-				Usage: "path to file with comma or space separated list of SRR#s that are to be mounted.",
+				Name:   "acc-file",
+				Usage:  "path to file with comma or space separated list of SRR#s that are to be mounted.",
+				EnvVar: "DBGAP_ACCFILE,SRACP_ACCFILE",
 			},
 			cli.StringFlag{
-				Name:  "loc",
-				Usage: "preferred region.",
+				Name:   "loc",
+				Usage:  "preferred region.",
+				EnvVar: "DBGAP_LOC,SRACP_LOC",
 			},
-
-			/////////////////////////
-			// Debugging
-			/////////////////////////
 			cli.BoolFlag{
 				Name:  "debug",
 				Usage: "Enable debugging output.",
@@ -124,7 +120,7 @@ func NewApp() (app *cli.App) {
 
 	flagCategories = map[string]string{}
 
-	for _, f := range []string{"help, h", "debug", "debug_fuse", "debug_service", "version, v", "f"} {
+	for _, f := range []string{"help, h", "debug", "version, v"} {
 		flagCategories[f] = "misc"
 	}
 
@@ -138,16 +134,10 @@ func NewApp() (app *cli.App) {
 }
 
 type Flags struct {
-	Help bool
-	// Fusera flags
-	Ngc  []byte
-	Acc  map[string]bool
-	Loc  string
-	Path string
-	// SRR# has a map of file names that map to urls where the data is
-	Urls map[string]map[string]string
-
-	// Debugging
+	Ngc   []byte
+	Acc   map[string]bool
+	Loc   string
+	Path  string
 	Debug bool
 }
 
@@ -163,14 +153,14 @@ func reconcileAccs(data []byte) []string {
 // Add the flags accepted by run to the supplied flag set, returning the
 // variables into which the flags will parse.
 func PopulateFlags(c *cli.Context) (ret *Flags, err error) {
+	if len(c.Args()) != 1 {
+		return nil, errors.New("must give a path to copy files to")
+	}
 	f := &Flags{
-		Acc: make(map[string]bool),
+		Acc:  make(map[string]bool),
+		Path: c.Args()[0],
 		// Debugging,
 		Debug: c.Bool("debug"),
-		Help:  c.Bool("help"),
-	}
-	if f.Help {
-		return f, nil
 	}
 	ngcpath := c.String("ngc")
 	if ngcpath != "" {
@@ -214,7 +204,27 @@ func PopulateFlags(c *cli.Context) (ret *Flags, err error) {
 	loc := c.String("loc")
 	// loc = strings.ToLower(loc)
 	if loc == "" {
-		return nil, errors.New("must provide a location of either s3.us-east-1 or gs.US")
+		// maybe we are on an AWS instance and can resolve what region we are in.
+		// let's try it out and if we timeout we'll return an error.
+		// use this url: http://169.254.169.254/latest/dynamic/instance-identity/document
+		resp, err := http.Get("http://169.254.169.254/latest/dynamic/instance-identity/document")
+		if err != nil {
+			return nil, errors.Wrapf(err, "location was not provided, fusera attempted to resolve region but encountered an error, this feature only works when fusera is on an amazon instance")
+		}
+		if resp.StatusCode != http.StatusOK {
+			return nil, errors.Errorf("issue trying to resolve region, got: %d: %s", resp.StatusCode, resp.Status)
+		}
+		var payload struct {
+			Region string `json:"region"`
+		}
+		err = json.NewDecoder(resp.Body).Decode(&payload)
+		if err != nil {
+			return nil, errors.New("issue trying to resolve region, couldn't decode response from amazon")
+		}
+		if payload.Region == "" {
+			return nil, errors.New("issue trying to resolve region, amazon returned empty region")
+		}
+		loc = "s3." + payload.Region
 	}
 	ll := strings.Split(loc, ".")
 	if len(ll) != 2 {
@@ -234,9 +244,6 @@ func PopulateFlags(c *cli.Context) (ret *Flags, err error) {
 		}
 	}
 	f.Loc = loc
-
-	f.Path = c.Args()[0]
 	twig.SetDebug(f.Debug)
-
 	return f, nil
 }

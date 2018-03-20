@@ -21,7 +21,8 @@ import (
 	"sync"
 
 	"github.com/jacobsa/fuse"
-	"github.com/mitre/fusera/log"
+	"github.com/mattrbianchi/twig"
+	"github.com/pkg/errors"
 	"github.com/shirou/gopsutil/mem"
 )
 
@@ -46,16 +47,16 @@ func maxMemToUse(buffersNow uint64) uint64 {
 		panic(err)
 	}
 
-	log.Log.Debugf("amount of available memory: %v", m.Available/1024/1024)
+	twig.Debugf("amount of available memory: %v", m.Available/1024/1024)
 
 	var ms runtime.MemStats
 	runtime.ReadMemStats(&ms)
 
-	log.Log.Debugf("amount of allocated memory: %v %v", ms.Sys/1024/1024, ms.Alloc/1024/1024)
+	twig.Debugf("amount of allocated memory: %v %v", ms.Sys/1024/1024, ms.Alloc/1024/1024)
 
 	max := uint64(m.Available+ms.Sys) / 2
 	maxbuffers := MaxUInt64(max/BUF_SIZE, 1)
-	log.Log.Debugf("using up to %v %vMB buffers, now is %v", maxbuffers, BUF_SIZE/1024/1024, buffersNow)
+	twig.Debugf("using up to %v %vMB buffers, now is %v", maxbuffers, BUF_SIZE/1024/1024, buffersNow)
 	return maxbuffers
 }
 
@@ -116,9 +117,8 @@ func (pool *BufferPool) RequestMultiple(size uint64, block bool) (buffers [][]by
 					// we don't have any in use buffers, and we've made attempts to
 					// free memory AND correct our limits, yet we still can't allocate.
 					// it's likely that we are simply asking for too much
-					log.Log.Errorf("Unable to allocate %d bytes, limit is %d bytes",
-						nPages*BUF_SIZE, pool.computedMaxbuffers*BUF_SIZE)
-					panic("OOM")
+					panic(errors.Errorf("Unable to allocate %d bytes, limit is %d bytes",
+						nPages*BUF_SIZE, pool.computedMaxbuffers*BUF_SIZE))
 				}
 			}
 			pool.cond.Wait()
@@ -151,8 +151,6 @@ func (pool *BufferPool) Free(buf []byte) {
 	pool.numBuffers--
 	pool.cond.Signal()
 }
-
-var mbufLog = log.GetLogger("mbuf")
 
 type MBuf struct {
 	pool    *BufferPool
@@ -203,10 +201,9 @@ func (mb *MBuf) Seek(offset int64, whence int) (int64, error) {
 			mb.rp = 0
 			return offset, nil
 		}
+	default:
+		panic(errors.Errorf("Seek %d %d", offset, whence))
 	}
-
-	log.Log.Errorf("Seek %d %d", offset, whence)
-	panic(fuse.EINVAL)
 
 	return 0, fuse.EINVAL
 }
@@ -291,8 +288,6 @@ func (mb *MBuf) Free() {
 	mb.buffers = nil
 }
 
-var bufferLog = log.GetLogger("buffer")
-
 type Buffer struct {
 	mu   sync.Mutex
 	cond *sync.Cond
@@ -339,7 +334,7 @@ func (b *Buffer) readLoop(r ReaderProvider) {
 			b.mu.Unlock()
 			break
 		}
-		bufferLog.Debugf("wrote %v into buffer", nread)
+		twig.Debugf("wrote %v into buffer", nread)
 
 		if nread == 0 {
 			b.reader.Close()
@@ -352,29 +347,29 @@ func (b *Buffer) readLoop(r ReaderProvider) {
 		// to allow another one to read
 		runtime.Gosched()
 	}
-	bufferLog.Debugf("<-- readLoop()")
+	twig.Debugf("<-- readLoop()")
 }
 
 func (b *Buffer) readFromStream(p []byte) (n int, err error) {
-	bufferLog.Debugf("reading %v from stream", len(p))
+	twig.Debugf("reading %v from stream", len(p))
 
 	n, err = b.reader.Read(p)
 	if n != 0 && err == io.ErrUnexpectedEOF {
 		err = nil
 	} else {
-		bufferLog.Debugf("read %v from stream", n)
+		twig.Debugf("read %v from stream", n)
 	}
 	return
 }
 
 func (b *Buffer) Read(p []byte) (n int, err error) {
-	bufferLog.Debugf("Buffer.Read(%v)", len(p))
+	twig.Debugf("Buffer.Read(%v)", len(p))
 
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
 	for b.reader == nil && b.err == nil {
-		bufferLog.Debugf("waiting for stream")
+		twig.Debugf("waiting for stream")
 		b.cond.Wait()
 		if b.err != nil {
 			err = b.err
@@ -392,16 +387,16 @@ func (b *Buffer) Read(p []byte) (n int, err error) {
 	}
 
 	if b.buf != nil {
-		bufferLog.Debugf("reading %v from buffer", len(p))
+		twig.Debugf("reading %v from buffer", len(p))
 
 		n, err = b.buf.Read(p)
 		if n == 0 {
 			b.buf.Free()
 			b.buf = nil
-			bufferLog.Debugf("drained buffer")
+			twig.Debugf("drained buffer")
 			n, err = b.readFromStream(p)
 		} else {
-			bufferLog.Debugf("read %v from buffer", n)
+			twig.Debugf("read %v from buffer", n)
 		}
 	} else if b.err != nil {
 		err = b.err

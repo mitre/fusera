@@ -26,13 +26,10 @@ import (
 
 	"github.com/mattrbianchi/twig"
 	"github.com/mitre/fusera/awsutil"
-	"github.com/mitre/fusera/log"
 
 	"github.com/jacobsa/fuse"
 	"github.com/jacobsa/fuse/fuseops"
 	"github.com/jacobsa/fuse/fuseutil"
-
-	"github.com/sirupsen/logrus"
 )
 
 type InodeAttributes struct {
@@ -123,15 +120,15 @@ func (inode *Inode) InflateAttributes() (attr fuseops.InodeAttributes) {
 	return
 }
 
-func (inode *Inode) logFuse(op string, args ...interface{}) {
-	if log.FuseLog.Level >= logrus.DebugLevel {
-		log.FuseLog.Debugln(op, inode.Id, *inode.FullName(), args)
-	}
-}
+// func (inode *Inode) logFuse(op string, args ...interface{}) {
+// 	if log.FuseLog.Level >= logrus.DebugLevel {
+// 		log.FuseLog.Debugln(op, inode.Id, *inode.FullName(), args)
+// 	}
+// }
 
-func (inode *Inode) errFuse(op string, args ...interface{}) {
-	log.FuseLog.Errorln(op, inode.Id, *inode.FullName(), args)
-}
+// func (inode *Inode) errFuse(op string, args ...interface{}) {
+// 	log.FuseLog.Errorln(op, inode.Id, *inode.FullName(), args)
+// }
 
 func (inode *Inode) ToDir() {
 	inode.Attributes = InodeAttributes{
@@ -270,7 +267,7 @@ func (parent *Inode) getChildName(name string) string {
 // which no long does anything, need to look into that to see if
 // that was legacy
 func (inode *Inode) Ref() {
-	inode.logFuse("Ref", inode.refcnt)
+	// inode.logFuse("Ref", inode.refcnt)
 
 	inode.refcnt++
 	return
@@ -278,7 +275,7 @@ func (inode *Inode) Ref() {
 
 // LOCKS_REQUIRED(fs.mu)
 func (inode *Inode) DeRef(n uint64) (stale bool) {
-	inode.logFuse("DeRef", n, inode.refcnt)
+	// inode.logFuse("DeRef", n, inode.refcnt)
 
 	if inode.refcnt < n {
 		panic(fmt.Sprintf("deref %v from %v", n, inode.refcnt))
@@ -292,7 +289,7 @@ func (inode *Inode) DeRef(n uint64) (stale bool) {
 
 func (inode *Inode) GetAttributes() (*fuseops.InodeAttributes, error) {
 	// XXX refresh attributes
-	inode.logFuse("GetAttributes")
+	// inode.logFuse("GetAttributes")
 	if inode.Invalid {
 		return nil, fuse.ENOENT
 	}
@@ -347,7 +344,7 @@ func (inode *Inode) getXattrMap(name string, userOnly bool) (
 }
 
 func (inode *Inode) GetXattr(name string) ([]byte, error) {
-	inode.logFuse("GetXattr", name)
+	// inode.logFuse("GetXattr", name)
 
 	inode.mu.Lock()
 	defer inode.mu.Unlock()
@@ -366,8 +363,7 @@ func (inode *Inode) GetXattr(name string) ([]byte, error) {
 }
 
 func (inode *Inode) ListXattr() ([]string, error) {
-	twig.Debug("handle.go/ListXattr called")
-	inode.logFuse("ListXattr")
+	// inode.logFuse("ListXattr")
 
 	inode.mu.Lock()
 	defer inode.mu.Unlock()
@@ -391,8 +387,7 @@ func (inode *Inode) ListXattr() ([]string, error) {
 }
 
 func (inode *Inode) OpenFile() (fh *FileHandle, err error) {
-	twig.Debug("handle.go/OpenFile called")
-	inode.logFuse("OpenFile")
+	// inode.logFuse("OpenFile")
 
 	inode.mu.Lock()
 	defer inode.mu.Unlock()

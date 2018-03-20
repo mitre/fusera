@@ -10,11 +10,11 @@ Fundamentally, Fusera presents all of the cloud-hosted SRA data for a set of SRA
 Installation
 ---
 
-### Linux
+### Dependencies
 
-Depending on the distro, `fuse-utils` may need to be installed.
+#### Fusera
 
-### Mac OS X
+Depending on the linux distro, `fuse-utils` may need to be installed.
 
 Mac users must install `osxfuse` either on their [website](https://osxfuse.github.io) or through [Homebrew](http://brew.sh/):
 
@@ -22,18 +22,27 @@ Mac users must install `osxfuse` either on their [website](https://osxfuse.githu
 $ brew cask install osxfuse
 ```
 
-Releases of Fusera can be found at https://github.com/mitre/fusera/releases
+#### Sracp
 
-For linux: `fusera-linux-amd64`
+For now, `sracp` requires an installation of `curl`. This is an "alpha" solution and it's in the roadmap to remove this dependency.
 
-For mac: `fusera-darwin-amd64`
+### Pre-built Releases
 
-After downloading, it's advised to rename the file `fusera` to fit with the rest of this document.
+For easy installation, releases of Fusera and Sracp can be found at https://github.com/mitre/fusera/releases
+
+For linux: `fusera-linux-amd64` and `sracp-linux-amd64`
+
+For mac: `fusera-darwin-amd64` and `sracp-darwin-amd64`
+
+After downloading, it's advised to rename the files to `fusera` and `sracp` to fit with the rest of this document.
 
 Make sure to grab the latest release, which is signified on the left sidebar with a green badge. Also note that changing the binary to be executable will probably be necessary:
 ```ShellSession
 chmod +x fusera
+chmod +x sracp
 ```
+
+It is advised to move this file somewhere in your PATH in order to increase ease of calling either `fusera` or `sracp`.
 
 ### Build from source:
 
@@ -41,59 +50,21 @@ chmod +x fusera
 ```ShellSession
 $ go get github.com/mitre/fusera/cmd/fusera
 $ go install github.com/mitre/fusera/cmd/fusera
+$ go get github.com/mitre/fusera/cmd/sracp
+$ go install github.com/mitre/fusera/cmd/sracp
 ```
 
 Usage
 ---
 
-Access the help with `fusera -h`:
-
-```
-NAME:
-   fusera - 
-
-USAGE:
-   fusera [global options] mountpoint
-   
-VERSION:
-   0.0.-beta
-   
-GLOBAL OPTIONS:
-   --ngc value       path to an ngc file that contains authentication info.
-   --acc value       comma separated list of SRR#s that are to be mounted.
-   --acc-file value  path to file with comma or space separated list of SRR#s that are to be mounted.
-   --loc value       preferred region.
-   
-MISC OPTIONS:
-   --help, -h       Print this help text and exit successfully.
-   --debug          Enable debugging output.
-   --debug_fuse     Enable fuse-related debugging output.
-   --debug_service  Enable service-related debugging output.
-   -f               Run fusera in foreground.
-   --version, -v    print the version
-```
-
-A simple run of Fusera:
-```ShellSession
-$ fusera --ngc [path/to/ngcfile] --acc [comma separated list of SRR#s] --loc [s3.us-east-1|gs.US] <mountpoint>
-```
-
-The `<mountpoint>` must be an existing, empty directory, to which the user has read and write permissions.
-
-It is recommended that the mountpoint be a directory owned by the user. Creating the mountpoint in system directories such as `/mnt`, `/tmp` have special uses in unix systems and should be avoided.
-
-Because of the nature of FUSE systems, only the user who ran fusera will be able to read the files mounted. This can be changed by editing a config file (reference) on the machine to allow_others, but be warned that there are security implications to be considered: https://github.com/libfuse/libfuse#security-implications.
-
-Accessions can be specified through the commmand line using the `--acc flag`, or, by reference to a file with space or comma separated accessions using the `--acc-file` option.   The union of these two sets of accessions is used to build the FUSE file system, with duplicates eliminated.
+In an effort to keep the instructions as up to date as possible, please refer to the wiki for instructions on how to use `fusera` or `sracp`:
+https://github.com/mitre/fusera/wiki/Running-Fusera
+https://github.com/mitre/fusera/wiki/Running-Sracp
 
 Troubleshooting
 ---
 
-If you cannot successfully run fusera, first check that you have access to the SRA Nameservice API by invoking:
-```
-curl -X POST "https://www.ncbi.nlm.nih.gov/Traces/names_test/names.fcgi?acc=SRR1601726&version=xc-1.0&location=s3.us-east-1"
-```
-If this command has issues, contact your network administrator to resolve network/proxy issues.
+https://github.com/mitre/fusera/wiki/Troubleshooting
 
 License
 ---
