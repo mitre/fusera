@@ -48,12 +48,6 @@
   version = "v0.8.0"
 
 [[projects]]
-  name = "github.com/sevlyar/go-daemon"
-  packages = ["."]
-  revision = "e49ef56654f54139c4dc0285f973f74e9649e729"
-  version = "v0.1.2"
-
-[[projects]]
   name = "github.com/shirou/gopsutil"
   packages = [
     "internal/common",
@@ -63,25 +57,10 @@
   version = "v2.18.01"
 
 [[projects]]
-  name = "github.com/sirupsen/logrus"
-  packages = [
-    ".",
-    "hooks/syslog"
-  ]
-  revision = "d682213848ed68c0a260ca37d6dd5ace8423f5ba"
-  version = "v1.0.4"
-
-[[projects]]
   name = "github.com/urfave/cli"
   packages = ["."]
   revision = "cfb38830724cc34fedffe9a2a29fb54fa9169cd1"
   version = "v1.20.0"
-
-[[projects]]
-  branch = "master"
-  name = "golang.org/x/crypto"
-  packages = ["ssh/terminal"]
-  revision = "432090b8f568c018896cd8a0fb0345872bbac6ce"
 
 [[projects]]
   branch = "master"
@@ -95,6 +74,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "2e9fded80ad698587d4b2647d1deb7e422fffa1b54894d442c36f0693ca40c61"
+  inputs-digest = "02694efdf7c6f7fb7a56cf2737ca74161750f6cff0f919947c6796d3d0ae21cd"
   solver-name = "gps-cdcl"
   solver-version = 1

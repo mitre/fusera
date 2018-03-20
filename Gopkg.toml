@@ -34,24 +34,12 @@
   name = "github.com/kardianos/osext"
 
 [[constraint]]
-  name = "github.com/sevlyar/go-daemon"
-  version = "0.1.2"
-
-[[constraint]]
   name = "github.com/shirou/gopsutil"
   version = "2.18.1"
 
 [[constraint]]
-  name = "github.com/sirupsen/logrus"
-  version = "1.0.4"
-
-[[constraint]]
   name = "github.com/urfave/cli"
   version = "1.20.0"
-
-[[constraint]]
-  branch = "master"
-  name = "golang.org/x/net"
 
 [prune]
   go-tests = true

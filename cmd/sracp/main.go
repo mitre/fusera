@@ -24,14 +24,12 @@ import (
 	"strings"
 
 	"github.com/mattrbianchi/twig"
-	"github.com/mitre/fusera/log"
 	"github.com/mitre/fusera/nr"
 	"github.com/pkg/errors"
 
 	"github.com/urfave/cli"
 )
 
-var mainLog = log.GetLogger("main")
 var Version = "beta"
 var flags *Flags
 
@@ -44,6 +42,9 @@ func main() {
 	EnsurePathIsSet()
 	var app = NewApp()
 	app.Action = func(c *cli.Context) error {
+		if c.IsSet("help") {
+			cli.ShowAppHelpAndExit(c, 0)
+		}
 		// Populate and parse flags.
 		flags, err := PopulateFlags(c)
 		if err != nil {
@@ -55,21 +56,8 @@ func main() {
 			}
 			fmt.Printf("\ninvalid arguments: %s\n\n", errors.Cause(err))
 			twig.Debugf("%+#v", err.Error())
-			cli.ShowAppHelp(c)
-			os.Exit(1)
-			return nil
+			cli.ShowAppHelpAndExit(c, 1)
 		}
-		if flags.Help {
-			cli.ShowAppHelp(c)
-			return nil
-		}
-		// We should get one argument exactly. Otherwise error out.
-		if len(c.Args()) != 1 {
-			fmt.Printf("\n%s takes exactly one argument.\n\n", app.Name)
-			cli.ShowAppHelp(c)
-			os.Exit(1)
-		}
-
 		twig.Debugf("accs: %s", flags.Acc)
 		// TODO: go ask for URLs, run libcurl
 		accs, err := nr.ResolveNames(flags.Loc, flags.Ngc, flags.Acc)

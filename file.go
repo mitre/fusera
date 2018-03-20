@@ -124,11 +124,9 @@ func (fh *FileHandle) readFromReadAhead(offset uint64, buf []byte) (bytesRead in
 }
 
 func (fh *FileHandle) ReadFile(offset int64, buf []byte) (bytesRead int, err error) {
-	twig.Debug("ReadFile called")
-	fh.inode.logFuse("ReadFile", offset, len(buf))
+	// fh.inode.logFuse("ReadFile", offset, len(buf))
 	defer func() {
-		fh.inode.logFuse("< ReadFile", bytesRead, err)
-
+		// fh.inode.logFuse("< ReadFile", bytesRead, err)
 		if err != nil {
 			if err == io.EOF {
 				err = nil
@@ -159,7 +157,7 @@ func (fh *FileHandle) readFile(offset int64, buf []byte) (bytesRead int, err err
 			fh.seqReadAmount += uint64(bytesRead)
 		}
 
-		fh.inode.logFuse("< readFile", bytesRead, err)
+		// fh.inode.logFuse("< readFile", bytesRead, err)
 	}()
 
 	if uint64(offset) >= fh.inode.Attributes.Size {
@@ -183,7 +181,7 @@ func (fh *FileHandle) readFile(offset int64, buf []byte) (bytesRead int, err err
 
 	if fh.readBufOffset != offset {
 		// XXX out of order read, maybe disable prefetching
-		fh.inode.logFuse("out of order read", offset, fh.readBufOffset)
+		// fh.inode.logFuse("out of order read", offset, fh.readBufOffset)
 
 		fh.readBufOffset = offset
 		fh.seqReadAmount = 0
@@ -246,7 +244,7 @@ func (fh *FileHandle) Release() {
 func (fh *FileHandle) readFromStream(offset int64, buf []byte) (bytesRead int, err error) {
 	defer func() {
 		if fh.inode.fs.opt.DebugFuse {
-			fh.inode.logFuse("< readFromStream", bytesRead)
+			// fh.inode.logFuse("< readFromStream", bytesRead)
 		}
 	}()
 
@@ -265,7 +263,7 @@ func (fh *FileHandle) readFromStream(offset int64, buf []byte) (bytesRead int, e
 				// Time to hot swap urls!
 				link, err := newURL(fh.inode)
 				if err != nil {
-					fh.inode.logFuse("< readFromStream error", 0, err)
+					// fh.inode.logFuse("< readFromStream error", 0, err)
 					return 0, syscall.EACCES
 				}
 				fh.inode.Link = link
@@ -290,7 +288,8 @@ func (fh *FileHandle) readFromStream(offset int64, buf []byte) (bytesRead int, e
 		twig.Debug("error reading file")
 		twig.Debug(err.Error())
 		if err != io.EOF {
-			fh.inode.logFuse("< readFromStream error", bytesRead, err)
+			twig.Debugf("readFromStream error: %s", err.Error())
+			// fh.inode.logFuse("< readFromStream error", bytesRead, err)
 		}
 		// always retry error on read
 		fh.reader.Close()

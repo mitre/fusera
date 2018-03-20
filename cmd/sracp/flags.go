@@ -80,36 +80,30 @@ func NewApp() (app *cli.App) {
 		HideHelp: true,
 		Writer:   os.Stderr,
 		Flags: []cli.Flag{
-
 			cli.BoolFlag{
 				Name:  "help, h",
 				Usage: "Print this help text and exit successfully.",
 			},
-
-			/////////////////////////
-			// Fusera
-			/////////////////////////
-
 			cli.StringFlag{
-				Name:  "ngc",
-				Usage: "path to an ngc file that contains authentication info.",
+				Name:   "ngc",
+				Usage:  "path to an ngc file that contains authentication info.",
+				EnvVar: "DBGAP_CREDENTIALS,SRACP_NGCFILE,SRACP_CREDENTIALS",
 			},
 			cli.StringFlag{
-				Name:  "acc",
-				Usage: "comma separated list of SRR#s that are to be mounted.",
+				Name:   "acc",
+				Usage:  "comma separated list of SRR#s that are to be mounted.",
+				EnvVar: "DBGAP_ACC,SRACP_ACC",
 			},
 			cli.StringFlag{
-				Name:  "acc-file",
-				Usage: "path to file with comma or space separated list of SRR#s that are to be mounted.",
+				Name:   "acc-file",
+				Usage:  "path to file with comma or space separated list of SRR#s that are to be mounted.",
+				EnvVar: "DBGAP_ACCFILE,SRACP_ACCFILE",
 			},
 			cli.StringFlag{
-				Name:  "loc",
-				Usage: "preferred region.",
+				Name:   "loc",
+				Usage:  "preferred region.",
+				EnvVar: "DBGAP_LOC,SRACP_LOC",
 			},
-
-			/////////////////////////
-			// Debugging
-			/////////////////////////
 			cli.BoolFlag{
 				Name:  "debug",
 				Usage: "Enable debugging output.",
@@ -124,7 +118,7 @@ func NewApp() (app *cli.App) {
 
 	flagCategories = map[string]string{}
 
-	for _, f := range []string{"help, h", "debug", "debug_fuse", "debug_service", "version, v", "f"} {
+	for _, f := range []string{"help, h", "debug", "version, v"} {
 		flagCategories[f] = "misc"
 	}
 
@@ -138,16 +132,10 @@ func NewApp() (app *cli.App) {
 }
 
 type Flags struct {
-	Help bool
-	// Fusera flags
-	Ngc  []byte
-	Acc  map[string]bool
-	Loc  string
-	Path string
-	// SRR# has a map of file names that map to urls where the data is
-	Urls map[string]map[string]string
-
-	// Debugging
+	Ngc   []byte
+	Acc   map[string]bool
+	Loc   string
+	Path  string
 	Debug bool
 }
 
@@ -163,14 +151,14 @@ func reconcileAccs(data []byte) []string {
 // Add the flags accepted by run to the supplied flag set, returning the
 // variables into which the flags will parse.
 func PopulateFlags(c *cli.Context) (ret *Flags, err error) {
+	if len(c.Args()) != 1 {
+		return nil, errors.New("must give a path to copy files to")
+	}
 	f := &Flags{
-		Acc: make(map[string]bool),
+		Acc:  make(map[string]bool),
+		Path: c.Args()[0],
 		// Debugging,
 		Debug: c.Bool("debug"),
-		Help:  c.Bool("help"),
-	}
-	if f.Help {
-		return f, nil
 	}
 	ngcpath := c.String("ngc")
 	if ngcpath != "" {
@@ -234,9 +222,6 @@ func PopulateFlags(c *cli.Context) (ret *Flags, err error) {
 		}
 	}
 	f.Loc = loc
-
-	f.Path = c.Args()[0]
 	twig.SetDebug(f.Debug)
-
 	return f, nil
 }
