@@ -76,7 +76,7 @@ var VersionHash string
 func NewApp() (app *cli.App) {
 
 	app = &cli.App{
-		Name:     "sracopy",
+		Name:     "sracp",
 		Version:  "0.0.-" + VersionHash,
 		Usage:    "",
 		HideHelp: true,
