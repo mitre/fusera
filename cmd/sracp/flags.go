@@ -17,8 +17,10 @@
 package main
 
 import (
+	"encoding/json"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -202,7 +204,27 @@ func PopulateFlags(c *cli.Context) (ret *Flags, err error) {
 	loc := c.String("loc")
 	// loc = strings.ToLower(loc)
 	if loc == "" {
-		return nil, errors.New("must provide a location of either s3.us-east-1 or gs.US")
+		// maybe we are on an AWS instance and can resolve what region we are in.
+		// let's try it out and if we timeout we'll return an error.
+		// use this url: http://169.254.169.254/latest/dynamic/instance-identity/document
+		resp, err := http.Get("http://169.254.169.254/latest/dynamic/instance-identity/document")
+		if err != nil {
+			return nil, errors.Wrapf(err, "location was not provided, fusera attempted to resolve region but encountered an error, this feature only works when fusera is on an amazon instance")
+		}
+		if resp.StatusCode != http.StatusOK {
+			return nil, errors.Errorf("issue trying to resolve region, got: %d: %s", resp.StatusCode, resp.Status)
+		}
+		var payload struct {
+			Region string `json:"region"`
+		}
+		err = json.NewDecoder(resp.Body).Decode(&payload)
+		if err != nil {
+			return nil, errors.New("issue trying to resolve region, couldn't decode response from amazon")
+		}
+		if payload.Region == "" {
+			return nil, errors.New("issue trying to resolve region, amazon returned empty region")
+		}
+		loc = "s3." + payload.Region
 	}
 	ll := strings.Split(loc, ".")
 	if len(ll) != 2 {
