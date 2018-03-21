@@ -10,6 +10,8 @@ Fundamentally, Fusera presents all of the cloud-hosted SRA data for a set of SRA
 Installation
 ---
 
+Note that it is in the works to have both `apt-get` packages and `homebrew` packages to ease the install process.
+
 ### Dependencies
 
 #### Fusera
@@ -57,9 +59,9 @@ $ go install github.com/mitre/fusera/cmd/sracp
 Usage
 ---
 
-In an effort to keep the instructions as up to date as possible, please refer to the wiki for instructions on how to use `fusera` or `sracp`:
-https://github.com/mitre/fusera/wiki/Running-Fusera
-https://github.com/mitre/fusera/wiki/Running-Sracp
+In an effort to keep the instructions as up to date as possible, please refer to the wiki for instructions on how to use `fusera` or `sracp`:  
+https://github.com/mitre/fusera/wiki/Running-Fusera  
+https://github.com/mitre/fusera/wiki/Running-Sracp  
 
 Troubleshooting
 ---
