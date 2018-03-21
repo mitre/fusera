@@ -15,6 +15,7 @@ package nr
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -104,20 +105,26 @@ func ResolveNames(loc string, ngc []byte, accs map[string]bool) (map[string]Acce
 		twig.Debugf("Response from Name Resolver API:\n%s", string(j))
 	}
 
-	accessions := sanitize(payload)
+	accessions, msg, err := sanitize(payload)
+	if msg != "" && err == nil {
+		fmt.Println(msg)
+	}
 
-	return accessions, nil
+	return accessions, err
 }
 
-func sanitize(payload []Payload) map[string]Accession {
-	accs := make(map[string]Accession)
+// msg is used to develop a message to the user indicating which accessions did not succeed while keeping err useful for disastrous errors.
+func sanitize(payload []Payload) (accs map[string]Accession, msg string, err error) {
+	errmsg := ""
+	accs = make(map[string]Accession)
 	for _, p := range payload {
 		// OK, so we don't want duplicate ACCs...
 		// but if we get duplicates, I guess we could union the files given...
 		// but then we don't want duplicate files...
 		// fun...
 		if p.Status != http.StatusOK {
-			twig.Infof("issue with getting files for %s: %s", p.ID, p.Message)
+			msg = msg + fmt.Sprintf("issue with accession %s: %s\n", p.ID, p.Message)
+			errmsg = errmsg + fmt.Sprintf("%s: %d\t%s", p.ID, p.Status, p.Message)
 			continue
 		}
 		// get existing acc or make a new one
@@ -128,11 +135,11 @@ func sanitize(payload []Payload) map[string]Accession {
 		}
 		for _, f := range p.Files {
 			if f.Link == "" {
-				twig.Infof("API returned no link for %s", f.Name)
+				msg = msg + fmt.Sprintf("issue with accession %s: API returned no link for %s\n", p.ID, f.Name)
 				continue
 			}
 			if f.Name == "" {
-				twig.Infof("API returned no name for file: %s", f)
+				msg = msg + fmt.Sprintf("issue with accession %s: API returned no name for %s\n", p.ID, f)
 				continue
 			}
 			acc.Files[f.Name] = f
@@ -140,7 +147,10 @@ func sanitize(payload []Payload) map[string]Accession {
 		// finally finished with acc
 		accs[acc.ID] = acc
 	}
-	return accs
+	if len(accs) < 1 {
+		err = errors.Errorf("API returned no mountable accessions\n%s", errmsg)
+	}
+	return
 }
 
 type Payload struct {

@@ -148,9 +148,7 @@ func main() {
 				twig.Debugf("%+v\n", err)
 				os.Exit(1)
 			}
-			fmt.Println("After checking that you do have proper permissions and that the folder exists, try using the unmount command to ensure the folder is not already mounted.")
-			fmt.Println("Seek out the troubleshooting guide online or contact your IT administrator.")
-			fmt.Printf("Mounting file system failed: %s\n", err.Error())
+			fmt.Printf("%s\n", err.Error())
 			twig.Debugf("%+v\n", err)
 			os.Exit(1)
 		}
