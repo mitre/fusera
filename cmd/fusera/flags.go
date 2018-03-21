@@ -18,6 +18,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -27,6 +28,7 @@ import (
 	"strings"
 	"text/tabwriter"
 	"text/template"
+	"time"
 
 	"github.com/mattrbianchi/twig"
 	"github.com/pkg/errors"
@@ -50,7 +52,7 @@ func init() {
    {{.Name}} - {{.Usage}}
 
 USAGE:
-   {{.Name}} {{if .Flags}}[global options]{{end}} mountpoint
+   {{.Name}} <command> [<flags>] mountpoint
    {{if .Version}}
 VERSION:
    {{.Version}}
@@ -59,12 +61,12 @@ AUTHOR(S):
    {{range .Authors}}{{ . }}{{end}}
    {{end}}{{if .Commands}}
 COMMANDS:
-   {{range .Commands}}{{join .Names ", "}}{{ "\t" }}{{.Usage}}
-   {{end}}{{end}}{{if .Flags}}
-GLOBAL OPTIONS:
-   {{range category .Flags ""}}{{.}}
-   {{end}}
-MISC OPTIONS:
+{{range .Commands}}{{"\t"}}{{join .Names ", "}}{{"\t"}}{{.Usage}}{{if .Flags}}
+
+{{"\t\t"}}FLAGS:
+{{range .Flags}}{{"\t\t\t"}}{{.}}
+{{end}}{{end}}
+{{end}}{{end}}{{if .Flags}}MISC OPTIONS:
    {{range category .Flags "misc"}}{{.}}
    {{end}}{{end}}{{if .Copyright }}
 COPYRIGHT:
@@ -75,8 +77,8 @@ COPYRIGHT:
 
 var VersionHash string
 
-func NewApp() (app *cli.App) {
-
+func NewApp() (app *cli.App, cmd *Commands) {
+	cmd = &Commands{}
 	app = &cli.App{
 		Name:     "fusera",
 		Version:  "0.0.-" + VersionHash,
@@ -88,29 +90,91 @@ func NewApp() (app *cli.App) {
 				Name:  "help, h",
 				Usage: "Print this help text and exit successfully.",
 			},
-			cli.StringFlag{
-				Name:   "ngc",
-				Usage:  "path to an ngc file that contains authentication info.",
-				EnvVar: "DBGAP_CREDENTIALS,FUSERA_NGCFILE,FUSERA_CREDENTIALS",
+		},
+		Action: func(c *cli.Context) error {
+			if c.IsSet("help") {
+				cli.ShowAppHelpAndExit(c, 0)
+			}
+			return nil
+		},
+		Commands: []cli.Command{
+			{
+				Name:    "mount",
+				Aliases: []string{"m"},
+				Usage:   "to mount a folder",
+				Action: func(c *cli.Context) error {
+					if c.IsSet("help") {
+						cli.ShowAppHelpAndExit(c, 0)
+					}
+					cmd.IsMount = true
+					twig.SetDebug(c.IsSet("debug"))
+					// Populate and parse flags.
+					flags, err := PopulateMountFlags(c)
+					if err != nil {
+						cause := errors.Cause(err)
+						if os.IsPermission(cause) {
+							fmt.Print("\nSeems like fusera doesn't have permissions to read a file!")
+							fmt.Printf("\nTry changing the permissions with chmod +r path/to/file\n")
+						}
+						fmt.Printf("\ninvalid arguments: %s\n\n", errors.Cause(err))
+						twig.Debugf("%+#v", err.Error())
+						cli.ShowAppHelpAndExit(c, 1)
+					}
+					defer func() {
+						time.Sleep(time.Second)
+						flags.Cleanup()
+					}()
+					twig.Debugf("accs: %s", flags.Acc)
+					cmd.Flags = flags
+					return nil
+				},
+				Flags: []cli.Flag{
+					cli.StringFlag{
+						Name:   "ngc",
+						Usage:  "path to file that authenticates access",
+						EnvVar: "DBGAP_CREDENTIALS",
+					},
+					cli.StringFlag{
+						Name:   "acc",
+						Usage:  "comma separated list of accessions",
+						EnvVar: "DBGAP_ACC",
+					},
+					cli.StringFlag{
+						Name:   "acc-file",
+						Usage:  "path to a cart file, listing accession numbers",
+						EnvVar: "DBGAP_ACCFILE",
+					},
+					cli.StringFlag{
+						Name:   "loc",
+						Usage:  "preferred region",
+						EnvVar: "DBGAP_LOC",
+					},
+					cli.BoolFlag{
+						Name:  "debug",
+						Usage: "Enable debugging output.",
+					},
+				},
 			},
-			cli.StringFlag{
-				Name:   "acc",
-				Usage:  "comma separated list of SRR#s that are to be mounted.",
-				EnvVar: "DBGAP_ACC,FUSERA_ACC",
-			},
-			cli.StringFlag{
-				Name:   "acc-file",
-				Usage:  "path to file with comma or space separated list of SRR#s that are to be mounted.",
-				EnvVar: "DBGAP_ACCFILE,FUSERA_ACCFILE",
-			},
-			cli.StringFlag{
-				Name:   "loc",
-				Usage:  "preferred region.",
-				EnvVar: "DBGAP_LOC,FUSERA_LOC",
-			},
-			cli.BoolFlag{
-				Name:  "debug",
-				Usage: "Enable debugging output.",
+			{
+				Name:    "unmount",
+				Aliases: []string{"u"},
+				Usage:   "to unmount a folder",
+				Action: func(c *cli.Context) error {
+					cmd.IsUnmount = true
+					if c.NArg() != 1 {
+						fmt.Printf("\ninvalid arguments: %s\n\n", "must give a path to a folder to unmount")
+						cli.ShowAppHelpAndExit(c, 1)
+					}
+					cmd.Path = c.Args().First()
+					twig.SetDebug(c.IsSet("debug"))
+					return nil
+				},
+				Flags: []cli.Flag{
+					cli.BoolFlag{
+						Name:  "debug",
+						Usage: "Enable debugging output.",
+					},
+				},
 			},
 		},
 	}
@@ -122,7 +186,7 @@ func NewApp() (app *cli.App) {
 
 	flagCategories = map[string]string{}
 
-	for _, f := range []string{"help, h", "debug", "version, v"} {
+	for _, f := range []string{"help, h", "version, v"} {
 		flagCategories[f] = "misc"
 	}
 
@@ -133,6 +197,13 @@ func NewApp() (app *cli.App) {
 	}
 
 	return
+}
+
+type Commands struct {
+	IsMount   bool
+	Flags     *Flags
+	IsUnmount bool
+	Path      string
 }
 
 type Flags struct {
@@ -165,8 +236,8 @@ func (f *Flags) Cleanup() {
 
 // Add the flags accepted by run to the supplied flag set, returning the
 // variables into which the flags will parse.
-func PopulateFlags(c *cli.Context) (ret *Flags, err error) {
-	if len(c.Args()) != 1 {
+func PopulateMountFlags(c *cli.Context) (ret *Flags, err error) {
+	if c.NArg() != 1 {
 		return nil, errors.New("must give a path to a folder to mount")
 	}
 	uid, gid := MyUserAndGroup()
@@ -266,10 +337,8 @@ func PopulateFlags(c *cli.Context) (ret *Flags, err error) {
 	}
 	f.Loc = loc
 
-	f.MountPointArg = c.Args()[0]
+	f.MountPointArg = c.Args().First()
 	f.MountPoint = f.MountPointArg
-
-	twig.SetDebug(f.Debug)
 
 	defer func() {
 		if err != nil {

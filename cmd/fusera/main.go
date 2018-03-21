@@ -24,15 +24,12 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"time"
 
 	"github.com/mattrbianchi/twig"
 	"github.com/mitre/fusera"
-	"github.com/pkg/errors"
 
 	"github.com/jacobsa/fuse"
 	"github.com/kardianos/osext"
-	"github.com/urfave/cli"
 )
 
 func init() {
@@ -127,61 +124,57 @@ var Version = "beta"
 func main() {
 	VersionHash = Version
 	massagePath()
-	app := NewApp()
-	var flags *Flags
-	app.Action = func(c *cli.Context) (err error) {
-		if c.IsSet("help") {
-			cli.ShowAppHelpAndExit(c, 0)
-		}
-		// Populate and parse flags.
-		flags, err = PopulateFlags(c)
-		if err != nil {
-			cause := errors.Cause(err)
-			if os.IsPermission(cause) {
-				fmt.Print("\nSeems like fusera doesn't have permissions to read a file!")
-				fmt.Printf("\nTry changing the permissions with chmod +r path/to/file\n")
-			}
-			fmt.Printf("\ninvalid arguments: %s\n\n", errors.Cause(err))
-			twig.Debugf("%+#v", err.Error())
-			cli.ShowAppHelp(c)
-			return
-		}
-		defer func() {
-			time.Sleep(time.Second)
-			flags.Cleanup()
-		}()
-		twig.Debugf("accs: %s", flags.Acc)
-
+	app, cmd := NewApp()
+	err := app.Run(MassageMountFlags(os.Args))
+	if err != nil {
+		fmt.Println("parsing arguments failed, please review the help with -h")
+		twig.Debugf("%+v\n", err)
+		os.Exit(1)
+	}
+	if cmd.IsMount {
 		// Mount the file system.
 		var mfs *fuse.MountedFileSystem
 		var fs *fusera.Fusera
-		fs, mfs, err = mount(context.Background(), flags)
+		fs, mfs, err = mount(context.Background(), cmd.Flags)
 		if err != nil {
-			twig.Infof("FATAL: Mounting file system: %v\n", err)
+			fmt.Println("Fusera failed to mount the file system")
+			if strings.Contains(err.Error(), "no such file or directory") {
+				fmt.Println("It seems like the directory you want to mount to does not exist or you do not have correct permissions to access it. Please create the directory or correct the permissions on it before trying again.")
+				twig.Debugf("%+v\n", err)
+				os.Exit(1)
+			}
+			if strings.Contains(err.Error(), "EOF") {
+				fmt.Println("It seems like the directory you want to mount to is already mounted by fusera or another device. Choose another directory or try using the unmount command before trying again. Be considerate of the unmount command, if anything is using the device mounted while attempting to unmount, it will fail.")
+				twig.Debugf("%+v\n", err)
+				os.Exit(1)
+			}
+			fmt.Println("After checking that you do have proper permissions and that the folder exists, try using the unmount command to ensure the folder is not already mounted.")
+			fmt.Println("Seek out the troubleshooting guide online or contact your IT administrator.")
+			fmt.Printf("Mounting file system failed: %s\n", err.Error())
 			twig.Debugf("%+v\n", err)
 			os.Exit(1)
 		}
 		twig.Debug("File system has been successfully mounted.")
 		// Let the user unmount with Ctrl-C
-		registerSIGINTHandler(fs, flags)
+		registerSIGINTHandler(fs, cmd.Flags)
 
 		// Wait for the file system to be unmounted.
 		err = mfs.Join(context.Background())
 		if err != nil {
-			twig.Info(fmt.Sprintf("FATAL: MountedFileSystem.Join: %v", err))
-			twig.Debug(fmt.Sprintf("FATAL: MountedFileSystem.Join: %+v", err))
+			fmt.Println("fusera encountered an internal issue, please rerun with the --debug flag to learn more.")
+			twig.Debugf("FATAL: MountedFileSystem.Join: %+#v\n", err)
 			os.Exit(1)
-			return
 		}
-
-		twig.Debug("Successfully exiting.")
-		return
+	}
+	if cmd.IsUnmount {
+		err := fusera.TryUnmount(cmd.Path)
+		if err != nil {
+			fmt.Printf("Failed to unmount %s\n", cmd.Path)
+			twig.Debugf("%+#v\n", err.Error())
+			os.Exit(1)
+		}
+		twig.Debugf("Successfully unmounted %s", cmd.Path)
 	}
 
-	err := app.Run(MassageMountFlags(os.Args))
-	if err != nil {
-		twig.Infof("FATAL: Unable to mount file system: %v\n", err)
-		twig.Debugf("%+v\n", err)
-		os.Exit(1)
-	}
+	twig.Debug("Successfully exiting.")
 }
