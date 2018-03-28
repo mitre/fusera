@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/mattrbianchi/twig"
+	"github.com/mitre/fusera/awsutil"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 )
@@ -256,9 +257,18 @@ func PopulateMountFlags(c *cli.Context) (ret *Flags, err error) {
 	ngcpath := c.String("ngc")
 	if ngcpath != "" {
 		// we were given a path to an ngc file. Let's read it.
-		data, err := ioutil.ReadFile(ngcpath)
-		if err != nil {
-			return nil, errors.Wrapf(err, "couldn't open ngc file at: %s", ngcpath)
+		var data []byte
+		if strings.HasPrefix(ngcpath, "http") {
+			// we were given a url on s3.
+			data, err = awsutil.ReadNgcFile(ngcpath)
+			if err != nil {
+				return nil, errors.Wrapf(err, "couldn't open ngc file at: %s", ngcpath)
+			}
+		} else {
+			data, err = ioutil.ReadFile(ngcpath)
+			if err != nil {
+				return nil, errors.Wrapf(err, "couldn't open ngc file at: %s", ngcpath)
+			}
 		}
 		f.Ngc = data
 	}

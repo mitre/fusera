@@ -16,11 +16,20 @@ package awsutil
 
 import (
 	"io"
+	"io/ioutil"
+	"net"
 	"net/http"
+	"net/url"
+	"strings"
 	"syscall"
+	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/jacobsa/fuse"
 	"github.com/mattrbianchi/twig"
+	"github.com/pkg/errors"
 )
 
 // Makes an http HEAD request using the URL provided.
@@ -75,6 +84,62 @@ func GetObjectRange(url, byteRange string) (*http.Response, error) {
 		return nil, parseHTTPError(resp.StatusCode)
 	}
 	return resp, nil
+}
+
+// Expects the url to point to a valid ngc file.
+// Uses the aws-sdk to read the file, assuming that
+// this file will not be publicly accessible and will
+// need to utilize aws credentials on the machine.
+func ReadNgcFile(path string) ([]byte, error) {
+	// Users should be using virtual-hosted style:
+	// http://[bucket].s3.amazonaws.com/[file]
+	if !strings.Contains(path, "s3.amazonaws.com") {
+		return nil, errors.Errorf("url did not point to a valid amazon s3 location or follow the virtual-hosted style of https://[bucket].[region].s3.amazonzws.com/[file]: %s", path)
+	}
+	u, err := url.Parse(path)
+	if err != nil {
+		return nil, err
+	}
+	sections := strings.Split(u.Hostname(), ".")
+	if len(sections) < 5 {
+		return nil, errors.Errorf("url did not point to a valid amazon s3 location or follow the virtual-hosted style of https://[bucket].[region].s3.amazonzws.com/[file]: %s", path)
+	}
+	bucket := sections[0]
+	twig.Debugf("bucket: %s", bucket)
+	region := sections[1]
+	twig.Debugf("region: %s", region)
+	file := u.Path
+	twig.Debugf("file: %s", file)
+	cfg := (&aws.Config{
+		Region: &region,
+	}).WithHTTPClient(&http.Client{
+		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   15 * time.Second,
+				KeepAlive: 15 * time.Second,
+				DualStack: true,
+			}).DialContext,
+			MaxIdleConns:          1000,
+			MaxIdleConnsPerHost:   1000,
+			IdleConnTimeout:       20 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 10 * time.Second,
+		},
+	})
+	sess := session.New(cfg)
+	svc := s3.New(sess)
+	input := &s3.GetObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(file),
+	}
+	obj, err := svc.GetObject(input)
+	if err != nil {
+		twig.Debug("error from GetObject")
+		return nil, err
+	}
+	bytes, err := ioutil.ReadAll(obj.Body)
+	return bytes, err
 }
 
 func parseHTTPError(code int) error {
