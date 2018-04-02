@@ -302,7 +302,7 @@ func (fh *FileHandle) readFromStream(offset int64, buf []byte) (bytesRead int, e
 
 func newURL(inode *Inode) (string, error) {
 	errfmtstr := "\naccession: %s\nfile: %s\n"
-	payload, err := nr.ResolveNames(inode.fs.opt.Loc, inode.fs.opt.Ngc, map[string]bool{inode.Acc: true})
+	payload, err := nr.ResolveNames(inode.fs.opt.ApiEndpoint, inode.fs.opt.Loc, inode.fs.opt.Ngc, map[string]bool{inode.Acc: true})
 	if err != nil {
 		return "", errors.Wrapf(err, "issue contacting API while trying to renew signed url for:%s", errfmtstr, inode.Acc, inode.Name)
 	}

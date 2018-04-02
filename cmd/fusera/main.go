@@ -81,11 +81,11 @@ func waitForSignal(wg *sync.WaitGroup) {
 // Mount the file system based on the supplied arguments, returning a
 // fuse.MountedFileSystem that can be joined to wait for unmounting.
 func mount(ctx context.Context, flags *Flags) (*fusera.Fusera, *fuse.MountedFileSystem, error) {
-	// TODO: change flags to fusera options
 	opt := &fusera.Options{
 		Acc:               flags.Acc,
 		Ngc:               flags.Ngc,
 		Loc:               flags.Loc,
+		ApiEndpoint:       flags.Endpoint,
 		MountOptions:      flags.MountOptions,
 		MountPoint:        flags.MountPoint,
 		MountPointArg:     flags.MountPointArg,

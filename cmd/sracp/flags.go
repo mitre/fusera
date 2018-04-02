@@ -111,9 +111,15 @@ func NewApp() (app *cli.App) {
 				Usage:  "preferred region.",
 				EnvVar: "DBGAP_LOC",
 			},
+			cli.StringFlag{
+				Name:   "endpoint",
+				Usage:  "Change the endpoint sracp uses to communicate with NIH API. Only to be used for advanced purposes.",
+				EnvVar: "DBGAP_ENDPOINT",
+			},
 			cli.BoolFlag{
-				Name:  "debug",
-				Usage: "Enable debugging output.",
+				Name:   "debug",
+				Usage:  "Enable debugging output.",
+				EnvVar: "SRACP_DEBUG",
 			},
 		},
 	}
@@ -139,12 +145,13 @@ func NewApp() (app *cli.App) {
 }
 
 type Flags struct {
-	Ngc   []byte
-	Acc   map[string]bool
-	Types map[string]bool
-	Loc   string
-	Path  string
-	Debug bool
+	Ngc      []byte
+	Acc      map[string]bool
+	Types    map[string]bool
+	Loc      string
+	Path     string
+	Debug    bool
+	Endpoint string
 }
 
 func reconcileAccs(data []byte) []string {
@@ -185,7 +192,8 @@ func PopulateFlags(c *cli.Context) (ret *Flags, err error) {
 		Types: make(map[string]bool),
 		Path:  c.Args()[0],
 		// Debugging,
-		Debug: c.Bool("debug"),
+		Debug:    c.Bool("debug"),
+		Endpoint: c.String("endpoint"),
 	}
 	ngcpath := c.String("ngc")
 	if ngcpath != "" {

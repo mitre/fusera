@@ -25,11 +25,12 @@ import (
 	"github.com/pkg/errors"
 )
 
-func ResolveNames(loc string, ngc []byte, accs map[string]bool) (map[string]Accession, error) {
-	url := "https://www.ncbi.nlm.nih.gov/Traces/names/names.cgi"
-	// url := "http://localhost:8000/"
+func ResolveNames(url, loc string, ngc []byte, accs map[string]bool) (map[string]Accession, error) {
+	if url == "" {
+		url = "https://www.ncbi.nlm.nih.gov/Traces/names/names.fcgi"
+		twig.Debugf("Name Resolver endpoint was empty, using default: %s", url)
+	}
 	// acc := strings.Join(accs, ",")
-	// fmt.Println("accs sent to name resolver: ", acc)
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 	if ngc != nil {
@@ -118,10 +119,6 @@ func sanitize(payload []Payload) (accs map[string]Accession, msg string, err err
 	errmsg := ""
 	accs = make(map[string]Accession)
 	for _, p := range payload {
-		// OK, so we don't want duplicate ACCs...
-		// but if we get duplicates, I guess we could union the files given...
-		// but then we don't want duplicate files...
-		// fun...
 		if p.Status != http.StatusOK {
 			msg = msg + fmt.Sprintf("issue with accession %s: %s\n", p.ID, p.Message)
 			errmsg = errmsg + fmt.Sprintf("%s: %d\t%s", p.ID, p.Status, p.Message)
