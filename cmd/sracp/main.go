@@ -76,6 +76,13 @@ func main() {
 				continue
 			}
 			for _, f := range v.Files {
+				if c.IsSet("only") {
+					ext := filepath.Ext(f.Name)
+					ext = strings.TrimLeft(ext, ".")
+					if _, ok := flags.Types[ext]; !ok {
+						continue
+					}
+				}
 				// TODO: call libcurl on each url to the path specified
 				args := []string{"-o", filepath.Join(flags.Path, v.ID, f.Name), f.Link}
 				cmd := exec.Command("curl", args...)

@@ -89,22 +89,27 @@ func NewApp() (app *cli.App) {
 			cli.StringFlag{
 				Name:   "ngc",
 				Usage:  "path to an ngc file that contains authentication info.",
-				EnvVar: "DBGAP_CREDENTIALS,SRACP_NGCFILE,SRACP_CREDENTIALS",
+				EnvVar: "DBGAP_CREDENTIALS",
 			},
 			cli.StringFlag{
 				Name:   "acc",
 				Usage:  "comma separated list of SRR#s that are to be mounted.",
-				EnvVar: "DBGAP_ACC,SRACP_ACC",
+				EnvVar: "DBGAP_ACC",
+			},
+			cli.StringFlag{
+				Name:   "only, file-types",
+				Usage:  "comma separated list of file types to copy.",
+				EnvVar: "DBGAP_ONLY",
 			},
 			cli.StringFlag{
 				Name:   "acc-file",
 				Usage:  "path to file with comma or space separated list of SRR#s that are to be mounted.",
-				EnvVar: "DBGAP_ACCFILE,SRACP_ACCFILE",
+				EnvVar: "DBGAP_ACCFILE",
 			},
 			cli.StringFlag{
 				Name:   "loc",
 				Usage:  "preferred region.",
-				EnvVar: "DBGAP_LOC,SRACP_LOC",
+				EnvVar: "DBGAP_LOC",
 			},
 			cli.BoolFlag{
 				Name:  "debug",
@@ -136,18 +141,37 @@ func NewApp() (app *cli.App) {
 type Flags struct {
 	Ngc   []byte
 	Acc   map[string]bool
+	Types map[string]bool
 	Loc   string
 	Path  string
 	Debug bool
 }
 
 func reconcileAccs(data []byte) []string {
-	accs_csv := strings.Split(string(data), ",")
-	if len(accs_csv) != 1 {
-		return accs_csv
+	accs := strings.Split(string(data), ",")
+	if len(accs) != 1 {
+		return accs
 	}
-	accs_tsv := strings.Split(string(data), " ")
-	return accs_tsv
+	accs = strings.Split(string(data), " ")
+	if len(accs) != 1 {
+		return accs
+	}
+	accs = strings.Split(string(data), "\n")
+	return vetAccs(accs)
+}
+
+func vetAccs(accs []string) []string {
+	aa := make([]string, 0, len(accs))
+	for _, a := range accs {
+		if !strings.Contains(a, "SRR") ||
+			strings.Contains(a, " ") ||
+			strings.Contains(a, ",") ||
+			strings.Contains(a, "\n") {
+			continue
+		}
+		aa = append(aa, a)
+	}
+	return aa
 }
 
 // Add the flags accepted by run to the supplied flag set, returning the
@@ -157,8 +181,9 @@ func PopulateFlags(c *cli.Context) (ret *Flags, err error) {
 		return nil, errors.New("must give a path to copy files to")
 	}
 	f := &Flags{
-		Acc:  make(map[string]bool),
-		Path: c.Args()[0],
+		Acc:   make(map[string]bool),
+		Types: make(map[string]bool),
+		Path:  c.Args()[0],
 		// Debugging,
 		Debug: c.Bool("debug"),
 	}
@@ -199,6 +224,17 @@ func PopulateFlags(c *cli.Context) (ret *Flags, err error) {
 	}
 	if len(aa) == 0 && accpath == "" {
 		return nil, errors.New("must provide at least one accession number")
+	}
+	types := strings.Split(c.String("only"), ",")
+	if len(types) == 1 && types[0] == "" {
+		types = nil
+	}
+	if len(types) > 0 {
+		for _, t := range types {
+			if t != "" {
+				f.Types[t] = true
+			}
+		}
 	}
 	// parseLocation()
 	loc := c.String("loc")
