@@ -60,7 +60,7 @@ func main() {
 		}
 		twig.Debugf("accs: %s", flags.Acc)
 		// TODO: go ask for URLs, run libcurl
-		accs, err := nr.ResolveNames(flags.Loc, flags.Ngc, flags.Acc)
+		accs, err := nr.ResolveNames(flags.Endpoint, flags.Loc, flags.Ngc, flags.Acc)
 		if err != nil {
 			return err
 		}

@@ -38,9 +38,10 @@ import (
 )
 
 type Options struct {
-	Ngc []byte
-	Acc map[string]bool
-	Loc string
+	Ngc         []byte
+	Acc         map[string]bool
+	Loc         string
+	ApiEndpoint string
 	// SRR# has a map of file names that map to urls where the data is
 	Urls map[string]map[string]string
 
@@ -88,7 +89,7 @@ func Mount(ctx context.Context, opt *Options) (*Fusera, *fuse.MountedFileSystem,
 }
 
 func NewFusera(ctx context.Context, opt *Options) (*Fusera, error) {
-	accessions, err := nr.ResolveNames(opt.Loc, opt.Ngc, opt.Acc)
+	accessions, err := nr.ResolveNames(opt.ApiEndpoint, opt.Loc, opt.Ngc, opt.Acc)
 	if err != nil {
 		return nil, err
 	}

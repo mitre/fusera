@@ -151,8 +151,14 @@ func NewApp() (app *cli.App, cmd *Commands) {
 						EnvVar: "DBGAP_LOC",
 					},
 					cli.BoolFlag{
-						Name:  "debug",
-						Usage: "Enable debugging output.",
+						Name:   "debug",
+						Usage:  "Enable debugging output.",
+						EnvVar: "FUSERA_DEBUG",
+					},
+					cli.StringFlag{
+						Name:   "endpoint",
+						Usage:  "Change the endpoint fusera uses to communicate with NIH API. Only to be used for advanced purposes.",
+						EnvVar: "DBGAP_ENDPOINT",
 					},
 				},
 			},
@@ -172,8 +178,9 @@ func NewApp() (app *cli.App, cmd *Commands) {
 				},
 				Flags: []cli.Flag{
 					cli.BoolFlag{
-						Name:  "debug",
-						Usage: "Enable debugging output.",
+						Name:   "debug",
+						Usage:  "Enable debugging output.",
+						EnvVar: "FUSERA_DEBUG",
 					},
 				},
 			},
@@ -223,7 +230,8 @@ type Flags struct {
 	Uid      uint32
 	Gid      uint32
 
-	Debug bool
+	Debug    bool
+	Endpoint string
 }
 
 func (f *Flags) Cleanup() {
@@ -250,9 +258,9 @@ func PopulateMountFlags(c *cli.Context) (ret *Flags, err error) {
 		FileMode:     0444,
 		Uid:          uint32(uid),
 		Gid:          uint32(gid),
-
 		// Debugging,
-		Debug: c.Bool("debug"),
+		Debug:    c.Bool("debug"),
+		Endpoint: c.String("endpoint"),
 	}
 	ngcpath := c.String("ngc")
 	if ngcpath != "" {
