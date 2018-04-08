@@ -79,6 +79,18 @@ COPYRIGHT:
 var VersionHash string
 
 func NewApp() (app *cli.App, cmd *Commands) {
+
+	var funcMap = template.FuncMap{
+		"category": filterCategory,
+		"join":     strings.Join,
+	}
+
+	flagCategories = map[string]string{}
+
+	for _, f := range []string{"help, h", "version, v"} {
+		flagCategories[f] = "misc"
+	}
+
 	cmd = &Commands{}
 	app = &cli.App{
 		Name:     "fusera",
@@ -93,9 +105,7 @@ func NewApp() (app *cli.App, cmd *Commands) {
 			},
 		},
 		Action: func(c *cli.Context) error {
-			if c.IsSet("help") {
-				cli.ShowAppHelpAndExit(c, 0)
-			}
+			cli.ShowAppHelpAndExit(c, 0)
 			return nil
 		},
 		Commands: []cli.Command{
@@ -104,9 +114,9 @@ func NewApp() (app *cli.App, cmd *Commands) {
 				Aliases: []string{"m"},
 				Usage:   "to mount a folder",
 				Action: func(c *cli.Context) error {
-					if c.IsSet("help") {
-						cli.ShowAppHelpAndExit(c, 0)
-					}
+					// if c.IsSet("help") {
+					// 	cli.ShowAppHelpAndExit(c, 0)
+					// }
 					cmd.IsMount = true
 					twig.SetDebug(c.IsSet("debug"))
 					// Populate and parse flags.
@@ -119,7 +129,7 @@ func NewApp() (app *cli.App, cmd *Commands) {
 						}
 						fmt.Printf("\ninvalid arguments: %s\n\n", errors.Cause(err))
 						twig.Debugf("%+#v", err.Error())
-						cli.ShowAppHelpAndExit(c, 1)
+						return err
 					}
 					defer func() {
 						time.Sleep(time.Second)
@@ -185,17 +195,6 @@ func NewApp() (app *cli.App, cmd *Commands) {
 				},
 			},
 		},
-	}
-
-	var funcMap = template.FuncMap{
-		"category": filterCategory,
-		"join":     strings.Join,
-	}
-
-	flagCategories = map[string]string{}
-
-	for _, f := range []string{"help, h", "version, v"} {
-		flagCategories[f] = "misc"
 	}
 
 	cli.HelpPrinter = func(w io.Writer, templ string, data interface{}) {
