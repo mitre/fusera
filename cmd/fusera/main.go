@@ -127,7 +127,7 @@ func main() {
 	app, cmd := NewApp()
 	err := app.Run(MassageMountFlags(os.Args))
 	if err != nil {
-		fmt.Printf("parsing arguments failed, please review the help with -h:\n %s\n", err.Error())
+		fmt.Println("starting fusera with given arguments failed, please review the help with -h")
 		twig.Debugf("%+v\n", err)
 		os.Exit(1)
 	}
@@ -140,15 +140,11 @@ func main() {
 			fmt.Println("Fusera failed to mount the file system")
 			if strings.Contains(err.Error(), "no such file or directory") {
 				fmt.Println("It seems like the directory you want to mount to does not exist or you do not have correct permissions to access it. Please create the directory or correct the permissions on it before trying again.")
-				twig.Debugf("%+v\n", err)
-				os.Exit(1)
 			}
 			if strings.Contains(err.Error(), "EOF") {
 				fmt.Println("It seems like the directory you want to mount to is already mounted by fusera or another device. Choose another directory or try using the unmount command before trying again. Be considerate of the unmount command, if anything is using the device mounted while attempting to unmount, it will fail.")
-				twig.Debugf("%+v\n", err)
-				os.Exit(1)
 			}
-			fmt.Printf("%s\n", err.Error())
+			fmt.Println("Details: " + err.Error())
 			twig.Debugf("%+v\n", err)
 			os.Exit(1)
 		}

@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"mime/multipart"
 	"net/http"
 	"time"
@@ -30,7 +31,6 @@ func ResolveNames(url, loc string, ngc []byte, accs map[string]bool) (map[string
 		url = "https://www.ncbi.nlm.nih.gov/Traces/names/names.fcgi"
 		twig.Debugf("Name Resolver endpoint was empty, using default: %s", url)
 	}
-	// acc := strings.Join(accs, ",")
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 	if ngc != nil {
@@ -63,11 +63,6 @@ func ResolveNames(url, loc string, ngc []byte, accs map[string]bool) (map[string
 			}
 		}
 	}
-	// if acc != "" {
-	// 	if err := writer.WriteField("acc", acc); err != nil {
-	// 		panic("could not write acc field to multipart.Writer")
-	// 	}
-	// }
 	twig.Debug("version: xc-1.0")
 	twig.Debug("format: json")
 	twig.Debugf("location: %s", loc)
@@ -88,22 +83,28 @@ func ResolveNames(url, loc string, ngc []byte, accs map[string]bool) (map[string
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.Errorf("error from Name Resolver API: %s", resp.Status)
+		return nil, errors.Errorf("encountered error from Name Resolver API: %s", resp.Status)
 	}
 	ct := resp.Header.Get("Content-Type")
 	if ct != "application/json" {
 		return nil, errors.Errorf("Name Resolver API gave incorrect Content-Type: %s", ct)
 	}
 
-	var payload []Payload
-	err = json.NewDecoder(resp.Body).Decode(&payload)
+	bytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to decode response from Name Resolver API")
+		return nil, errors.New("fatal error when trying to read response from Name Resolver API")
 	}
-	if j, err := json.MarshalIndent(payload, "", "\t"); err != nil {
-		twig.Debug("failed to marshal response from Name Resolver API for debug logging")
-	} else {
-		twig.Debugf("Response from Name Resolver API:\n%s", string(j))
+	content := string(bytes)
+	twig.Debugf("Response Body from API:\n%s", content)
+	var payload []Payload
+	err = json.Unmarshal(bytes, &payload)
+	if err != nil {
+		var errPayload Payload
+		err = json.Unmarshal(bytes, &errPayload)
+		if err != nil {
+			return nil, errors.New("fatal error when trying to read response from Name Resolver API")
+		}
+		return nil, errors.Errorf("encountered error from Name Resolver API: %d: %s", errPayload.Status, errPayload.Message)
 	}
 
 	accessions, msg, err := sanitize(payload)
