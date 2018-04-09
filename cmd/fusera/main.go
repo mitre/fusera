@@ -127,7 +127,7 @@ func main() {
 	app, cmd := NewApp()
 	err := app.Run(MassageMountFlags(os.Args))
 	if err != nil {
-		fmt.Println("parsing arguments failed, please review the help with -h")
+		fmt.Printf("parsing arguments failed, please review the help with -h:\n %s\n", err.Error())
 		twig.Debugf("%+v\n", err)
 		os.Exit(1)
 	}
