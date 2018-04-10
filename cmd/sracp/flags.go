@@ -17,16 +17,15 @@
 package main
 
 import (
-	"encoding/json"
 	"io"
 	"io/ioutil"
-	"net/http"
 	"os"
 	"strings"
 	"text/tabwriter"
 	"text/template"
 
 	"github.com/mattrbianchi/twig"
+	"github.com/mitre/fusera/awsutil"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 )
@@ -235,14 +234,13 @@ func PopulateFlags(c *cli.Context) (ret *Flags, err error) {
 	}
 	loc := c.String("loc")
 	if !c.IsSet("loc") {
-		// Attempt to resolve the location on aws or gs.
-		loc, err = resolveLocation()
+		loc, err = awsutil.ResolveRegion()
 		if err != nil {
 			return nil, err
 		}
 	}
-	loc, err = parseLocation(loc)
-	if err != nil {
+	ok := awsutil.IsLocation(loc)
+	if !ok {
 		return nil, err
 	}
 	f.Loc = loc
@@ -260,52 +258,4 @@ func PopulateFlags(c *cli.Context) (ret *Flags, err error) {
 	}
 	twig.SetDebug(f.Debug)
 	return f, nil
-}
-
-func resolveLocation() (string, error) {
-	// maybe we are on an AWS instance and can resolve what region we are in.
-	// let's try it out and if we timeout we'll return an error.
-	// use this url: http://169.254.169.254/latest/dynamic/instance-identity/document
-	resp, err := http.Get("http://169.254.169.254/latest/dynamic/instance-identity/document")
-	if err != nil {
-		return "", errors.Wrapf(err, "location was not provided, fusera attempted to resolve region but encountered an error, this feature only works when fusera is on an amazon instance")
-	}
-	if resp.StatusCode != http.StatusOK {
-		return "", errors.Errorf("issue trying to resolve region, got: %d: %s", resp.StatusCode, resp.Status)
-	}
-	var payload struct {
-		Region string `json:"region"`
-	}
-	err = json.NewDecoder(resp.Body).Decode(&payload)
-	if err != nil {
-		return "", errors.New("issue trying to resolve region, couldn't decode response from amazon")
-	}
-	if payload.Region == "" {
-		return "", errors.New("issue trying to resolve region, amazon returned empty region")
-	}
-	return "s3." + payload.Region, nil
-}
-
-func parseLocation(loc string) (string, error) {
-	ll := strings.Split(loc, ".")
-	if len(ll) != 2 {
-		if loc == "ftp-ncbi" {
-			return loc, nil
-		}
-		return "", errors.New("location must be either: gs.US, s3.us-east-1, or ftp-ncbi")
-	}
-	if ll[0] != "gs" && ll[0] != "s3" {
-		return "", errors.Errorf("the service %s is not supported, please use gs or s3", ll[0])
-	}
-	if ll[0] == "gs" {
-		if ll[1] != "US" {
-			return "", errors.Errorf("the region %s isn't supported on gs, only US", ll[1])
-		}
-	}
-	if ll[0] == "s3" {
-		if ll[1] != "us-east-1" {
-			return "", errors.Errorf("the region %s isn't supported on s3, only us-east-1", ll[1])
-		}
-	}
-	return loc, nil
 }

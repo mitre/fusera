@@ -15,11 +15,13 @@
 package awsutil
 
 import (
+	"encoding/json"
 	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -142,6 +144,98 @@ func ReadNgcFile(path string) ([]byte, error) {
 	return bytes, err
 }
 
+func ResolveRegion() (string, error) {
+	// Attempt to resolve the location on aws or gs.
+	loc, err := resolveAwsRegion()
+	if err != nil {
+		// could be on google
+		// retain aws error message
+		msg := err.Error()
+		loc, err = resolveGcpZone()
+		if err != nil {
+			// return both aws and google error messages
+			return "", errors.Wrap(err, msg)
+		}
+	}
+	return loc, nil
+}
+
+func resolveAwsRegion() (string, error) {
+	client := &http.Client{
+		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   1 * time.Second,
+				KeepAlive: 1 * time.Second,
+				DualStack: true,
+			}).DialContext,
+			MaxIdleConns:          1000,
+			MaxIdleConnsPerHost:   1000,
+			IdleConnTimeout:       500 * time.Millisecond,
+			TLSHandshakeTimeout:   500 * time.Millisecond,
+			ExpectContinueTimeout: 500 * time.Millisecond,
+		},
+	}
+	// maybe we are on an AWS instance and can resolve what region we are in.
+	// let's try it out and if we timeout we'll return an error.
+	// use this url: http://169.254.169.254/latest/dynamic/instance-identity/document
+	resp, err := client.Get("http://169.254.169.254/latest/dynamic/instance-identity/document")
+	if err != nil {
+		return "", errors.Wrapf(err, "location was not provided, fusera attempted to resolve region but encountered an error, this feature only works when fusera is on an amazon or google instance")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", errors.Errorf("issue trying to resolve region, got: %d: %s", resp.StatusCode, resp.Status)
+	}
+	var payload struct {
+		Region string `json:"region"`
+	}
+	err = json.NewDecoder(resp.Body).Decode(&payload)
+	if err != nil {
+		return "", errors.New("issue trying to resolve region, couldn't decode response from amazon")
+	}
+	if payload.Region == "" {
+		return "", errors.New("issue trying to resolve region, amazon returned empty region")
+	}
+	return "s3." + payload.Region, nil
+}
+
+func resolveGcpZone() (string, error) {
+	client := &http.Client{
+		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   1 * time.Second,
+				KeepAlive: 1 * time.Second,
+				DualStack: true,
+			}).DialContext,
+			MaxIdleConns:          1000,
+			MaxIdleConnsPerHost:   1000,
+			IdleConnTimeout:       500 * time.Millisecond,
+			TLSHandshakeTimeout:   500 * time.Millisecond,
+			ExpectContinueTimeout: 500 * time.Millisecond,
+		},
+	}
+	req, err := http.NewRequest("GET", "http://metadata.google.internal/computeMetadata/v1/instance/zone?alt=json", nil)
+	req.Header.Add("Metadata-Flavor", "Google")
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", errors.Wrapf(err, "location was not provided, fusera attempted to resolve region but encountered an error, this feature only works when fusera is on an amazon or google instance")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", errors.Errorf("issue trying to resolve region, got: %d: %s", resp.StatusCode, resp.Status)
+	}
+	var payload string
+	err = json.NewDecoder(resp.Body).Decode(&payload)
+	if err != nil {
+		return "", errors.New("issue trying to resolve region, couldn't decode response from google")
+	}
+	path := filepath.Base(payload)
+	if path == "" || len(path) == 1 {
+		return "", errors.New("issue trying to resolve region, google returned empty region")
+	}
+	return "gs." + path, nil
+}
+
 func parseHTTPError(code int) error {
 	switch code {
 	case 400:
@@ -164,6 +258,85 @@ func parseHTTPError(code int) error {
 		twig.Debug("converting to EOF")
 		return io.EOF
 	}
+}
+
+var Directory = CloudDirectory{
+	"gs": map[string]bool{
+		"US": true,
+
+		"us-east1-b": true,
+		"us-east1-c": true,
+		"us-east1-d": true,
+
+		"us-east4-a": true,
+		"us-east4-b": true,
+		"us-east4-c": true,
+
+		"us-central1-a": true,
+		"us-central1-b": true,
+		"us-central1-c": true,
+		"us-central1-f": true,
+
+		"us-west1-a": true,
+		"us-west1-b": true,
+		"us-west1-c": true,
+	},
+	"s3": map[string]bool{
+		"us-east-1": true,
+	},
+}
+
+type CloudDirectory map[string]map[string]bool
+
+var IncorrectLocationMessage = `
+================
+gs.[region]
+================
+
+regions for gs:
+----------------
+
+US
+
+us-east1-b us-east1-c us-east1-d
+
+us-east4-a us-east4-b us-east4-c
+
+us-central1-a us-central1-b us-central1-c us-central1-f
+
+us-west1-a us-west1-b us-west1-c
+
+================
+s3.[region]
+================
+
+regions for s3:
+----------------
+
+us-east-1
+
+================
+For accessing files on ncbi, use the location ftp-ncbi
+================
+
+`
+
+func IsLocation(loc string) bool {
+	ll := strings.Split(loc, ".")
+	if len(ll) != 2 {
+		if loc == "ftp-ncbi" {
+			return true
+		}
+		return false
+	}
+	regions, ok := Directory[ll[0]]
+	if !ok {
+		return false
+	}
+	if _, ok := regions[ll[1]]; !ok {
+		return false
+	}
+	return true
 }
 
 func String(s string) *string {
