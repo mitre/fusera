@@ -147,12 +147,12 @@ func NewFusera(ctx context.Context, opt *Options) (*Fusera, error) {
 			fullFileName := dir.getChildName(name)
 			dir.mu.Lock()
 			file := NewInode(fs, dir, awsutil.String(name), &fullFileName)
-			// TODO: This will have to change when the real API is made
 			file.Link = f.Link
 			file.Acc = acc.ID
 			u, err := strconv.ParseUint(f.Size, 10, 64)
 			if err != nil {
-				return nil, errors.New("failed to parse size into a uint64")
+				twig.Debug("%s: %s: failed to set file size to %s, couldn't parse into a uint64", acc.ID, file.Name, f.Size)
+				u = 0
 			}
 			file.Attributes = InodeAttributes{
 				Size:           u,
@@ -186,6 +186,26 @@ func NewFusera(ctx context.Context, opt *Options) (*Fusera, error) {
 			// }
 		}
 	}
+	name := ".initialized"
+	fullName := root.getChildName(name)
+	root.mu.Lock()
+	node := NewInode(fs, root, awsutil.String(name), &fullName)
+	node.Attributes = InodeAttributes{
+		Size: 0,
+	}
+	fh := NewFileHandle(node)
+	fh.poolHandle = fs.bufferPool
+	fh.buf = MBuf{}.Init(fh.poolHandle, 0, true)
+	fh.dirty = true
+	node.fileHandles = 1
+	root.touch()
+	root.mu.Unlock()
+	fs.mu.Lock()
+	fs.insertInode(root, node)
+	hID := fs.nextHandleID
+	fs.nextHandleID++
+	fs.fileHandles[hID] = fh
+	fs.mu.Unlock()
 
 	return fs, nil
 }
