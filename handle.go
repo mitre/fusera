@@ -39,14 +39,15 @@ type InodeAttributes struct {
 }
 
 type Inode struct {
-	Id         fuseops.InodeID
-	Name       *string
-	Link       string
-	Acc        string
-	fs         *Fusera
-	Attributes InodeAttributes
-	KnownSize  *uint64
-	AttrTime   time.Time
+	Id          fuseops.InodeID
+	Name        *string
+	Link        string
+	Acc         string
+	ErrContents string
+	fs          *Fusera
+	Attributes  InodeAttributes
+	KnownSize   *uint64
+	AttrTime    time.Time
 
 	mu sync.Mutex // everything below is protected by mu
 

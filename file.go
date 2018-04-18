@@ -16,8 +16,10 @@
 package fusera
 
 import (
+	"bytes"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"sync"
 	"syscall"
 	"time"
@@ -254,33 +256,38 @@ func (fh *FileHandle) readFromStream(offset int64, buf []byte) (bytesRead int, e
 	}
 
 	if fh.reader == nil {
-		sd, _ := time.ParseDuration("30s")
-		exp := fh.inode.Attributes.ExpirationDate
-		if !exp.IsZero() {
-			twig.Debugf("seems like we have a url that expires: %s", exp)
-			if time.Until(exp) < sd {
-				twig.Debug("url is expired")
-				// Time to hot swap urls!
-				link, err := newURL(fh.inode)
-				if err != nil {
-					// fh.inode.logFuse("< readFromStream error", 0, err)
-					return 0, syscall.EACCES
+		if fh.inode.ErrContents == "" {
+			sd, _ := time.ParseDuration("30s")
+			exp := fh.inode.Attributes.ExpirationDate
+			if !exp.IsZero() {
+				twig.Debugf("seems like we have a url that expires: %s", exp)
+				if time.Until(exp) < sd {
+					twig.Debug("url is expired")
+					// Time to hot swap urls!
+					link, err := newURL(fh.inode)
+					if err != nil {
+						// fh.inode.logFuse("< readFromStream error", 0, err)
+						return 0, syscall.EACCES
+					}
+					fh.inode.Link = link
 				}
-				fh.inode.Link = link
 			}
-		}
 
-		bytes := ""
-		if offset != 0 {
-			bytes = fmt.Sprintf("bytes=%v-", offset)
-		}
+			bytes := ""
+			if offset != 0 {
+				bytes = fmt.Sprintf("bytes=%v-", offset)
+			}
 
-		resp, err := awsutil.GetObjectRange(fh.inode.Link, bytes)
-		if err != nil {
-			return 0, err
-		}
+			resp, err := awsutil.GetObjectRange(fh.inode.Link, bytes)
+			if err != nil {
+				return 0, err
+			}
 
-		fh.reader = resp.Body
+			fh.reader = resp.Body
+		} else {
+			// This is an error.log file, need to read from its error contents.
+			fh.reader = ioutil.NopCloser(bytes.NewBufferString(fh.inode.ErrContents))
+		}
 	}
 
 	bytesRead, err = fh.reader.Read(buf)

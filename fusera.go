@@ -91,7 +91,8 @@ func Mount(ctx context.Context, opt *Options) (*Fusera, *fuse.MountedFileSystem,
 func NewFusera(ctx context.Context, opt *Options) (*Fusera, error) {
 	accessions, err := nr.ResolveNames(opt.ApiEndpoint, opt.Loc, opt.Ngc, opt.Acc)
 	if err != nil {
-		return nil, err
+		fmt.Println(err.Error())
+		// return nil, err
 	}
 	fs := &Fusera{
 		accs:  accessions,
@@ -120,9 +121,6 @@ func NewFusera(ctx context.Context, opt *Options) (*Fusera, error) {
 	fs.dirHandles = make(map[fuseops.HandleID]*DirHandle)
 
 	fs.fileHandles = make(map[fuseops.HandleID]*FileHandle)
-
-	// fs.replicators = Ticket{Total: 16}.Init()
-	// fs.restorers = Ticket{Total: 8}.Init()
 
 	http.DefaultTransport.(*http.Transport).MaxIdleConnsPerHost = 1000
 
@@ -185,6 +183,36 @@ func NewFusera(ctx context.Context, opt *Options) (*Fusera, error) {
 			// 	},
 			// }
 		}
+		twig.Debugf("accession's err content: %s", acc.ErrorLog())
+		if acc.HasError() {
+			twig.Debugf("accession: %s has an error file", acc.ID)
+			errlogName := "error.log"
+			fullFileName := dir.getChildName(errlogName)
+			dir.mu.Lock()
+			file := NewInode(fs, dir, awsutil.String(errlogName), &fullFileName)
+			file.Acc = acc.ID
+			file.ErrContents = acc.ErrorLog()
+			file.Attributes = InodeAttributes{
+				Size:           uint64(len(acc.ErrorLog())),
+				Mtime:          time.Now(),
+				ExpirationDate: time.Now(),
+			}
+
+			fh := NewFileHandle(file)
+			fh.poolHandle = fs.bufferPool
+			fh.buf = MBuf{}.Init(fh.poolHandle, 0, true)
+			fh.dirty = true
+			file.fileHandles = 1
+			dir.touch()
+			dir.mu.Unlock()
+			fs.mu.Lock()
+			// dir.insertChild(file)
+			fs.insertInode(dir, file)
+			hID := fs.nextHandleID
+			fs.nextHandleID++
+			fs.fileHandles[hID] = fh
+			fs.mu.Unlock()
+		}
 	}
 	name := ".initialized"
 	fullName := root.getChildName(name)
@@ -214,7 +242,7 @@ type Fusera struct {
 	fuseutil.NotImplementedFileSystem
 
 	// Fusera specific info
-	accs map[string]nr.Accession
+	accs map[string]*nr.Accession
 
 	opt *Options
 

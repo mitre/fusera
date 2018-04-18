@@ -1,3 +1,6 @@
+// Modifications Copyright 2018 The MITRE Corporation
+// Author: Matthew Bianchi
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -26,7 +29,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func ResolveNames(url, loc string, ngc []byte, accs map[string]bool) (map[string]Accession, error) {
+func ResolveNames(url, loc string, ngc []byte, accs map[string]bool) (map[string]*Accession, error) {
 	if url == "" {
 		url = "https://www.ncbi.nlm.nih.gov/Traces/names/names.fcgi"
 		twig.Debugf("Name Resolver endpoint was empty, using default: %s", url)
@@ -102,53 +105,64 @@ func ResolveNames(url, loc string, ngc []byte, accs map[string]bool) (map[string
 		var errPayload Payload
 		err = json.Unmarshal(bytes, &errPayload)
 		if err != nil {
-			return nil, errors.New("fatal error when trying to read response from Name Resolver API")
+			return nil, errors.Errorf("could not understand response from Name Resolver API: %s\n", content)
 		}
-		return nil, errors.Errorf("encountered error from Name Resolver API: %d: %s", errPayload.Status, errPayload.Message)
+		return nil, errors.Errorf("encountered error from Name Resolver API: %d: %s\n", errPayload.Status, errPayload.Message)
 	}
 
-	accessions, msg, err := sanitize(payload)
-	if msg != "" && err == nil {
-		fmt.Println(msg)
-	}
+	accessions, err := sanitize(payload)
 
 	return accessions, err
 }
 
-// msg is used to develop a message to the user indicating which accessions did not succeed while keeping err useful for disastrous errors.
-func sanitize(payload []Payload) (accs map[string]Accession, msg string, err error) {
-	errmsg := ""
-	accs = make(map[string]Accession)
+func sanitize(payload []Payload) (map[string]*Accession, error) {
+	successfulAccessionExists := false
+	accs := make(map[string]*Accession)
 	for _, p := range payload {
+		errmsg := ""
 		if p.Status != http.StatusOK {
-			msg = msg + fmt.Sprintf("issue with accession %s: %s\n", p.ID, p.Message)
-			errmsg = errmsg + fmt.Sprintf("%s: %d\t%s", p.ID, p.Status, p.Message)
+			// Something is wrong with the whole accession
+			errmsg = fmt.Sprintf("Some errors were encountered with %s:\n", p.ID)
+			errmsg = errmsg + fmt.Sprintf("%d\t%s\n", p.Status, p.Message)
+			twig.Debug(errmsg)
+			errAcc := &Accession{ID: p.ID, Files: make(map[string]File)}
+			if a, ok := accs[p.ID]; ok {
+				// so we have a duplicate acc...
+				errAcc = a
+			}
+			errAcc.AppendError(errmsg)
+			accs[errAcc.ID] = errAcc
 			continue
 		}
 		// get existing acc or make a new one
-		acc := Accession{ID: p.ID, Files: make(map[string]File)}
+		acc := &Accession{ID: p.ID, Files: make(map[string]File)}
 		if a, ok := accs[p.ID]; ok {
 			// so we have a duplicate acc...
 			acc = a
 		}
 		for _, f := range p.Files {
-			if f.Link == "" {
-				msg = msg + fmt.Sprintf("issue with accession %s: API returned no link for %s\n", p.ID, f.Name)
-				continue
-			}
+			// Checking if something is wrong with the individual files
 			if f.Name == "" {
-				msg = msg + fmt.Sprintf("issue with accession %s: API returned no name for %s\n", p.ID, f)
+				acc.AppendError(fmt.Sprintf("API returned no name field for file: %v\n", f))
+				accs[acc.ID] = acc
 				continue
 			}
+			if f.Link == "" {
+				acc.AppendError(fmt.Sprintf("API returned no link for file: %s\n", f.Name))
+				accs[acc.ID] = acc
+				continue
+			}
+			// TODO: this is where we'll do HEAD calls on the files to check the validity of the URLs
 			acc.Files[f.Name] = f
 		}
-		// finally finished with acc
+		successfulAccessionExists = true
 		accs[acc.ID] = acc
 	}
-	if len(accs) < 1 {
-		err = errors.Errorf("API returned no mountable accessions\n%s", errmsg)
+	var err error
+	if !successfulAccessionExists {
+		err = errors.New("API returned no mountable accessions! Check error logs to resolve.\n")
 	}
-	return
+	return accs, err
 }
 
 type Payload struct {
@@ -159,8 +173,21 @@ type Payload struct {
 }
 
 type Accession struct {
-	ID    string `json:"accession,omitempty"`
-	Files map[string]File
+	ID       string `json:"accession,omitempty"`
+	errorLog string
+	Files    map[string]File
+}
+
+func (a *Accession) ErrorLog() string {
+	return a.errorLog
+}
+
+func (a *Accession) AppendError(message string) {
+	a.errorLog += message
+}
+
+func (a *Accession) HasError() bool {
+	return a.errorLog != ""
 }
 
 type File struct {
