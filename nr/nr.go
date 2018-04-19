@@ -29,51 +29,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func ResolveNames(url, loc string, ngc []byte, accs map[string]bool) (map[string]*Accession, error) {
-	if url == "" {
-		url = "https://www.ncbi.nlm.nih.gov/Traces/names/names.fcgi"
-		twig.Debugf("Name Resolver endpoint was empty, using default: %s", url)
-	}
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-	if ngc != nil {
-		// handle ngc bytes
-		part, err := writer.CreateFormFile("ngc", "ngc")
-		if err != nil {
-			return nil, errors.Wrapf(err, "couldn't create form file for ngc")
-		}
-		_, err = io.Copy(part, bytes.NewReader(ngc))
-		if err != nil {
-			return nil, errors.Errorf("couldn't copy ngc contents: %s into multipart file to make request", ngc)
-		}
-
-	}
-	if err := writer.WriteField("version", "xc-1.0"); err != nil {
-		return nil, errors.New("could not write version field to multipart.Writer")
-	}
-	if err := writer.WriteField("format", "json"); err != nil {
-		return nil, errors.New("could not write format field to multipart.Writer")
-	}
-	if loc != "" {
-		if err := writer.WriteField("location", loc); err != nil {
-			return nil, errors.New("could not write loc field to multipart.Writer")
-		}
-	}
-	if accs != nil {
-		for acc, _ := range accs {
-			if err := writer.WriteField("acc", acc); err != nil {
-				return nil, errors.New("could not write acc field to multipart.Writer")
-			}
-		}
-	}
-	twig.Debug("version: xc-1.0")
-	twig.Debug("format: json")
-	twig.Debugf("location: %s", loc)
-	twig.Debugf("acc: %v", accs)
-	if err := writer.Close(); err != nil {
-		return nil, errors.New("could not close multipart.Writer")
-	}
-
+func makeBatchRequest(url string, writer *multipart.Writer, body io.Reader) ([]Payload, error) {
 	req, err := http.NewRequest("POST", url, body)
 	if err != nil {
 		return nil, errors.New("can't create request to Name Resolver API")
@@ -82,7 +38,9 @@ func ResolveNames(url, loc string, ngc []byte, accs map[string]bool) (map[string
 	twig.Debugf("HTTP REQUEST:\n %+v", req)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, errors.New("can't resolve acc names")
+		fmt.Printf("Cannot make request to Name Resolver API at %s\n", url)
+		fmt.Printf("Network error encountered when making request:\n%s\n", err.Error())
+		return nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -109,10 +67,68 @@ func ResolveNames(url, loc string, ngc []byte, accs map[string]bool) (map[string
 		}
 		return nil, errors.Errorf("encountered error from Name Resolver API: %d: %s\n", errPayload.Status, errPayload.Message)
 	}
+	return payload, nil
+}
 
-	accessions, err := sanitize(payload)
-
-	return accessions, err
+// url: the endpoint for ResolveNames to use, otherwise default will be used.
+// loc: the location to request the files to be in.
+// ngc: the bytes that represent an ngc file, authorizing access to accessions
+// batch: the number of accessions to ask for at once in one request.
+// accs: the accessions to resolve names for.
+func ResolveNames(url, loc string, ngc []byte, batch int, accs map[string]bool) (map[string]*Accession, error) {
+	if accs == nil {
+		return nil, errors.New("must provide accs to ResolveNames")
+	}
+	if loc == "" {
+		return nil, errors.New("must provide a location to ResolveNames")
+	}
+	if batch < 1 {
+		return nil, errors.Errorf("must provide a batch number greater than 0: %d", batch)
+	}
+	if url == "" {
+		url = "https://www.ncbi.nlm.nih.gov/Traces/names/names.fcgi"
+		twig.Debugf("Name Resolver endpoint was empty, using default: %s", url)
+	}
+	payload := make([]Payload, 0, len(accs))
+	batchCount := 0
+	totalCount := 0
+	var body *bytes.Buffer
+	var writer *multipart.Writer
+	totalAccs := len(accs)
+	twig.Debugf("total accs: %d", totalAccs)
+	for acc, _ := range accs {
+		batchCount++
+		totalCount++
+		if batchCount == 1 {
+			body = &bytes.Buffer{}
+			writer = multipart.NewWriter(body)
+			if err := writeFields(writer, ngc, loc); err != nil {
+				return nil, err
+			}
+		}
+		if err := writer.WriteField("acc", acc); err != nil {
+			return nil, errors.New("could not write acc field to multipart.Writer")
+		}
+		if batchCount == batch || batchCount == totalAccs || totalCount == totalAccs {
+			if err := writer.Close(); err != nil {
+				return nil, errors.New("could not close multipart.Writer")
+			}
+			p, err := makeBatchRequest(url, writer, body)
+			if err != nil {
+				fmt.Println("encountered a network error in one of the batches:")
+				fmt.Println(err.Error())
+				//TODO: now we have another place where we can have failures but also success...
+				// So we won't append this data to the payload, but need to record this
+				// batch's failure cleanly
+				batchCount = 0
+				continue
+			}
+			payload = append(payload, p...)
+			batchCount = 0
+		}
+	}
+	twig.Debugf("payload: %#+v\n", payload)
+	return sanitize(payload)
 }
 
 func sanitize(payload []Payload) (map[string]*Accession, error) {
@@ -198,4 +214,29 @@ type File struct {
 	Link           string    `json:"link,omitempty"`
 	ExpirationDate time.Time `json:"expirationDate,omitempty"`
 	Service        string    `json:"service,omitempty"`
+}
+
+func writeFields(writer *multipart.Writer, ngc []byte, loc string) error {
+	if ngc != nil {
+		// handle ngc bytes
+		part, err := writer.CreateFormFile("ngc", "ngc")
+		if err != nil {
+			return errors.Wrapf(err, "couldn't create form file for ngc")
+		}
+		_, err = io.Copy(part, bytes.NewReader(ngc))
+		if err != nil {
+			return errors.Errorf("couldn't copy ngc contents: %s into multipart file to make request", ngc)
+		}
+
+	}
+	if err := writer.WriteField("version", "xc-1.0"); err != nil {
+		return errors.New("could not write version field to multipart.Writer")
+	}
+	if err := writer.WriteField("format", "json"); err != nil {
+		return errors.New("could not write format field to multipart.Writer")
+	}
+	if err := writer.WriteField("location", loc); err != nil {
+		return errors.New("could not write loc field to multipart.Writer")
+	}
+	return nil
 }

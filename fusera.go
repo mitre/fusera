@@ -23,6 +23,7 @@ import (
 	"os"
 	"runtime/debug"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -42,6 +43,8 @@ type Options struct {
 	Acc         map[string]bool
 	Loc         string
 	ApiEndpoint string
+	AwsBatch    int
+	GcpBatch    int
 	// SRR# has a map of file names that map to urls where the data is
 	Urls map[string]map[string]string
 
@@ -61,11 +64,8 @@ type Options struct {
 	StatCacheTTL time.Duration
 	TypeCacheTTL time.Duration
 
-	// Debugging
-	Debug      bool
-	DebugFuse  bool
-	DebugS3    bool
-	Foreground bool
+	// // Debugging
+	Debug bool
 }
 
 func Mount(ctx context.Context, opt *Options) (*Fusera, *fuse.MountedFileSystem, error) {
@@ -89,7 +89,14 @@ func Mount(ctx context.Context, opt *Options) (*Fusera, *fuse.MountedFileSystem,
 }
 
 func NewFusera(ctx context.Context, opt *Options) (*Fusera, error) {
-	accessions, err := nr.ResolveNames(opt.ApiEndpoint, opt.Loc, opt.Ngc, opt.Acc)
+	batch := 10
+	if strings.HasPrefix(opt.Loc, "s3") {
+		batch = opt.AwsBatch
+	}
+	if strings.HasPrefix(opt.Loc, "gcp") {
+		batch = opt.GcpBatch
+	}
+	accessions, err := nr.ResolveNames(opt.ApiEndpoint, opt.Loc, opt.Ngc, batch, opt.Acc)
 	if err != nil {
 		fmt.Println(err.Error())
 		// return nil, err

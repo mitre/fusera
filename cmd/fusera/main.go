@@ -86,6 +86,8 @@ func mount(ctx context.Context, flags *Flags) (*fusera.Fusera, *fuse.MountedFile
 		Ngc:               flags.Ngc,
 		Loc:               flags.Loc,
 		ApiEndpoint:       flags.Endpoint,
+		AwsBatch:          flags.AwsBatch,
+		GcpBatch:          flags.GcpBatch,
 		MountOptions:      flags.MountOptions,
 		MountPoint:        flags.MountPoint,
 		MountPointArg:     flags.MountPointArg,
