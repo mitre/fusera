@@ -209,6 +209,7 @@ func (a *Accession) HasError() bool {
 type File struct {
 	Name           string    `json:"name,omitempty"`
 	Size           string    `json:"size,omitempty"`
+	Type           string    `json:"type,omitempty"`
 	ModifiedDate   time.Time `json:"modificationDate,omitempty"`
 	Md5Hash        string    `json:"md5,omitempty"`
 	Link           string    `json:"link,omitempty"`
