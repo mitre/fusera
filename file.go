@@ -244,12 +244,6 @@ func (fh *FileHandle) Release() {
 
 // Returns the number of bytes read and a file error if one occured.
 func (fh *FileHandle) readFromStream(offset int64, buf []byte) (bytesRead int, err error) {
-	defer func() {
-		if fh.inode.fs.opt.DebugFuse {
-			// fh.inode.logFuse("< readFromStream", bytesRead)
-		}
-	}()
-
 	if uint64(offset) >= fh.inode.Attributes.Size {
 		// nothing to read
 		return
@@ -264,12 +258,13 @@ func (fh *FileHandle) readFromStream(offset int64, buf []byte) (bytesRead int, e
 				if time.Until(exp) < sd {
 					twig.Debug("url is expired")
 					// Time to hot swap urls!
-					link, err := newURL(fh.inode)
+					link, expiration, err := newURL(fh.inode)
 					if err != nil {
 						// fh.inode.logFuse("< readFromStream error", 0, err)
 						return 0, syscall.EACCES
 					}
 					fh.inode.Link = link
+					fh.inode.Attributes.ExpirationDate = expiration
 				}
 			}
 
@@ -307,11 +302,11 @@ func (fh *FileHandle) readFromStream(offset int64, buf []byte) (bytesRead int, e
 	return
 }
 
-func newURL(inode *Inode) (string, error) {
+func newURL(inode *Inode) (string, time.Time, error) {
 	errfmtstr := "\naccession: %s\nfile: %s\n"
-	payload, err := nr.ResolveNames(inode.fs.opt.ApiEndpoint, inode.fs.opt.Loc, inode.fs.opt.Ngc, map[string]bool{inode.Acc: true})
+	payload, err := nr.ResolveNames(inode.fs.opt.ApiEndpoint, inode.fs.opt.Loc, inode.fs.opt.Ngc, 1, map[string]bool{inode.Acc: true})
 	if err != nil {
-		return "", errors.Wrapf(err, "issue contacting API while trying to renew signed url for:%s", errfmtstr, inode.Acc, inode.Name)
+		return "", time.Now(), errors.Wrapf(err, "issue contacting API while trying to renew signed url for:%s", errfmtstr, inode.Acc, inode.Name)
 	}
 	twig.Debug("resolved a url")
 	for _, p := range payload {
@@ -319,14 +314,14 @@ func newURL(inode *Inode) (string, error) {
 			if f.Name == *inode.Name {
 				twig.Debug("got a new link")
 				if f.Link == "" {
-					return "", errors.Errorf("API did not give new signed url for:%s", errfmtstr, inode.Acc, inode.Name)
+					return "", time.Now(), errors.Errorf("API did not give new signed url for:%s", errfmtstr, inode.Acc, inode.Name)
 				}
-				return f.Link, nil
+				return f.Link, f.ExpirationDate, nil
 			}
 		}
 	}
 	twig.Debug("did not get a new link")
-	return "", errors.Errorf("couldn't get new signed url for:%s", errfmtstr, inode.Acc, inode.Name)
+	return "", time.Now(), errors.Errorf("couldn't get new signed url for:%s", errfmtstr, inode.Acc, inode.Name)
 }
 
 func (fh *FileHandle) resetToKnownSize() {

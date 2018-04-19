@@ -165,6 +165,16 @@ func NewApp() (app *cli.App, cmd *Commands) {
 						Usage:  "Change the endpoint fusera uses to communicate with NIH API. Only to be used for advanced purposes.",
 						EnvVar: "DBGAP_ENDPOINT",
 					},
+					cli.IntFlag{
+						Name:   "aws-batch",
+						Usage:  "Adjust the amount of accessions fusera puts in one request to the Name Resolver API when using an aws location. Only to be used for advanced purposes.",
+						EnvVar: "DBGAP_AWSBATCH",
+					},
+					cli.IntFlag{
+						Name:   "gcp-batch",
+						Usage:  "Adjust the amount of accessions fusera puts in one request to the Name Resolver API when using a gcp location. Only to be used for advanced purposes.",
+						EnvVar: "DBGAP_GCPBATCH",
+					},
 				},
 			},
 			{
@@ -226,6 +236,8 @@ type Flags struct {
 
 	Debug    bool
 	Endpoint string
+	AwsBatch int
+	GcpBatch int
 }
 
 func (f *Flags) Cleanup() {
@@ -255,6 +267,14 @@ func PopulateMountFlags(c *cli.Context) (ret *Flags, err error) {
 		// Debugging,
 		Debug:    c.Bool("debug"),
 		Endpoint: c.String("endpoint"),
+		AwsBatch: 50,
+		GcpBatch: 10,
+	}
+	if c.IsSet("aws-batch") {
+		f.AwsBatch = c.Int("aws-batch")
+	}
+	if c.IsSet("gcp-batch") {
+		f.GcpBatch = c.Int("gcp-batch")
 	}
 	ngcpath := c.String("ngc")
 	if ngcpath != "" {
