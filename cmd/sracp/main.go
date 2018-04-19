@@ -21,7 +21,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/mattrbianchi/twig"
 	"github.com/mitre/fusera/nr"
@@ -59,35 +61,51 @@ func main() {
 			cli.ShowAppHelpAndExit(c, 1)
 		}
 		twig.Debugf("accs: %s", flags.Acc)
-		// TODO: go ask for URLs, run libcurl
 		accs, err := nr.ResolveNames(flags.Endpoint, flags.Loc, flags.Ngc, 1, flags.Acc)
 		if err != nil {
 			return err
 		}
 		_, err = exec.LookPath("curl")
 		if err != nil {
-			// TODO: create better message describing that curl isnt installed
+			fmt.Println("Sracp cannot find the executable \"curl\" on the machine. Please install it and try again.")
 			return err
 		}
 		for _, v := range accs {
-			err := os.Mkdir(filepath.Join(flags.Path, v.ID), 0755)
+			err := os.MkdirAll(filepath.Join(flags.Path, v.ID), 0755)
 			if err != nil {
-				twig.Infof("Issue creating directory for %s: %s\n", v.ID, err.Error())
+				fmt.Printf("Issue creating directory for %s: %s\n", v.ID, err.Error())
 				continue
 			}
 			for _, f := range v.Files {
 				if c.IsSet("only") {
-					ext := filepath.Ext(f.Name)
-					ext = strings.TrimLeft(ext, ".")
-					if _, ok := flags.Types[ext]; !ok {
+					if _, ok := flags.Types[f.Type]; !ok {
 						continue
 					}
 				}
+				// Check available disk space and see if file is larger.
+				// If so, print out error message saying such, refuse to use curl, and move on.
+				var stat syscall.Statfs_t
+				wd, err := os.Getwd()
+				syscall.Statfs(wd, &stat)
+
+				// Available blocks * size per block = available space in bytes
+				availableBytes := stat.Bavail * uint64(stat.Bsize)
+				fileSize, err := strconv.ParseUint(f.Size, 10, 64)
+				if err != nil {
+					fmt.Printf("%s: %s: failed to parse file size in order to check if there's enough disk space to copy it. File size value was %s", v.ID, f.Name, f.Size)
+					continue
+				}
+
+				if availableBytes < fileSize {
+					fmt.Printf("DISK FULL: It appears there are only %d available bytes on disk and the file %s is %d bytes.", availableBytes, f.Name, fileSize)
+					continue
+				}
+
 				// TODO: call libcurl on each url to the path specified
 				args := []string{"-o", filepath.Join(flags.Path, v.ID, f.Name), f.Link}
 				cmd := exec.Command("curl", args...)
 				cmd.Env = os.Environ()
-				err := cmd.Run()
+				err = cmd.Run()
 				if err != nil {
 					twig.Infof("Issue copying %s: %s\n", args[2], err.Error())
 				}
