@@ -241,7 +241,7 @@ func PopulateFlags(c *cli.Context) (ret *Flags, err error) {
 	}
 	ok := awsutil.IsLocation(loc)
 	if !ok {
-		return nil, err
+		return nil, errors.New("unable to resolve location")
 	}
 	f.Loc = loc
 
