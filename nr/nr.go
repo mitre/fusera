@@ -86,7 +86,7 @@ func ResolveNames(url, loc string, ngc []byte, batch int, accs map[string]bool) 
 		return nil, errors.Errorf("must provide a batch number greater than 0: %d", batch)
 	}
 	if url == "" {
-		url = "https://www.ncbi.nlm.nih.gov/Traces/names/names.fcgi"
+		url = "https://www.ncbi.nlm.nih.gov/Traces/sdl/1/retrieve"
 		twig.Debugf("Name Resolver endpoint was empty, using default: %s", url)
 	}
 	payload := make([]Payload, 0, len(accs))
