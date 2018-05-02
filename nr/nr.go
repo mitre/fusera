@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"mime/multipart"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/mattrbianchi/twig"
@@ -36,15 +37,25 @@ func makeBatchRequest(url string, writer *multipart.Writer, body io.Reader) ([]P
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	twig.Debugf("HTTP REQUEST:\n %+v", req)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		fmt.Printf("Cannot make request to Name Resolver API at %s\n", url)
-		fmt.Printf("Network error encountered when making request:\n%s\n", err.Error())
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, errors.Errorf("encountered error from Name Resolver API: %s", resp.Status)
+	// implement a retry
+	retried := false
+	var resp *http.Response
+	for {
+		resp, err = http.DefaultClient.Do(req)
+		if err != nil {
+			fmt.Printf("Cannot make request to Name Resolver API at %s\n", url)
+			fmt.Printf("Network error encountered when making request:\n%s\n", err.Error())
+			return nil, err
+		}
+		if resp.StatusCode != http.StatusOK {
+			if !retried {
+				retried = true
+				resp.Body.Close()
+				continue
+			}
+			return nil, errors.Errorf("encountered error from Name Resolver API: %s", resp.Status)
+		}
+		break
 	}
 	ct := resp.Header.Get("Content-Type")
 	if ct != "application/json" {
@@ -95,6 +106,7 @@ func ResolveNames(url, loc string, ngc []byte, batch int, accs map[string]bool) 
 	var body *bytes.Buffer
 	var writer *multipart.Writer
 	totalAccs := len(accs)
+	var currentAccsInBatch []string
 	twig.Debugf("total accs: %d", totalAccs)
 	for acc, _ := range accs {
 		batchCount++
@@ -105,18 +117,22 @@ func ResolveNames(url, loc string, ngc []byte, batch int, accs map[string]bool) 
 			if err := writeFields(writer, ngc, loc); err != nil {
 				return nil, err
 			}
+			currentAccsInBatch = make([]string, 0, batch)
 		}
 		if err := writer.WriteField("acc", acc); err != nil {
-			return nil, errors.New("could not write acc field to multipart.Writer")
+			return nil, errors.Errorf("could not write acc field to multipart.Writer for accession: %s", acc)
 		}
+		currentAccsInBatch = append(currentAccsInBatch, acc)
 		if batchCount == batch || batchCount == totalAccs || totalCount == totalAccs {
 			if err := writer.Close(); err != nil {
-				return nil, errors.New("could not close multipart.Writer")
+				return nil, errors.New("Internal error: could not close multipart.Writer")
 			}
 			p, err := makeBatchRequest(url, writer, body)
 			if err != nil {
-				fmt.Println("encountered a network error in one of the batches:")
+				fmt.Println("encountered an issue in one of the batches:")
 				fmt.Println(err.Error())
+				fmt.Printf("Total number of accessions that failed in this batch: %d\n", len(currentAccsInBatch))
+				fmt.Printf("Accessions in batch that failed: %s\n", strings.Join(currentAccsInBatch, "\n"))
 				//TODO: now we have another place where we can have failures but also success...
 				// So we won't append this data to the payload, but need to record this
 				// batch's failure cleanly
