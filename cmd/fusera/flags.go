@@ -168,11 +168,13 @@ func NewApp() (app *cli.App, cmd *Commands) {
 					cli.IntFlag{
 						Name:   "aws-batch",
 						Usage:  "Adjust the amount of accessions fusera puts in one request to the Name Resolver API when using an aws location. Only to be used for advanced purposes.",
+						Value:  50,
 						EnvVar: "DBGAP_AWSBATCH",
 					},
 					cli.IntFlag{
 						Name:   "gcp-batch",
 						Usage:  "Adjust the amount of accessions fusera puts in one request to the Name Resolver API when using a gcp location. Only to be used for advanced purposes.",
+						Value:  10,
 						EnvVar: "DBGAP_GCPBATCH",
 					},
 				},
