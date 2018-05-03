@@ -88,13 +88,13 @@ func makeBatchRequest(url string, writer *multipart.Writer, body io.Reader) ([]P
 // accs: the accessions to resolve names for.
 func ResolveNames(url, loc string, ngc []byte, batch int, accs map[string]bool) (map[string]*Accession, error) {
 	if accs == nil {
-		return nil, errors.New("must provide accs to ResolveNames")
+		return nil, errors.New("must provide accessions to pass to Name Resolver API")
 	}
 	if loc == "" {
-		return nil, errors.New("must provide a location to ResolveNames")
+		return nil, errors.New("must provide a location to pass to Name Resolver API")
 	}
 	if batch < 1 {
-		return nil, errors.Errorf("must provide a batch number greater than 0: %d", batch)
+		return nil, errors.Errorf("must provide a valid batch number, gave: %d", batch)
 	}
 	if url == "" {
 		url = "https://www.ncbi.nlm.nih.gov/Traces/sdl/1/retrieve"

@@ -93,13 +93,13 @@ func NewFusera(ctx context.Context, opt *Options) (*Fusera, error) {
 	if strings.HasPrefix(opt.Loc, "s3") {
 		batch = opt.AwsBatch
 	}
-	if strings.HasPrefix(opt.Loc, "gcp") {
+	if strings.HasPrefix(opt.Loc, "gs") {
 		batch = opt.GcpBatch
 	}
 	accessions, err := nr.ResolveNames(opt.ApiEndpoint, opt.Loc, opt.Ngc, batch, opt.Acc)
 	if err != nil {
 		fmt.Println(err.Error())
-		// return nil, err
+		return nil, err
 	}
 	fs := &Fusera{
 		accs:  accessions,
