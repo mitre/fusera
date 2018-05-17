@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package fusera
+package fuseralib
 
 import (
 	"context"
@@ -68,6 +68,8 @@ type Options struct {
 	Debug bool
 }
 
+// Mount the file system based on the supplied arguments, returning a
+// fuse.MountedFileSystem that can be joined to wait for unmounting.
 func Mount(ctx context.Context, opt *Options) (*Fusera, *fuse.MountedFileSystem, error) {
 	fs, err := NewFusera(ctx, opt)
 	if err != nil {

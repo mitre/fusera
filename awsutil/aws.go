@@ -92,11 +92,11 @@ func GetObjectRange(url, byteRange string) (*http.Response, error) {
 // Uses the aws-sdk to read the file, assuming that
 // this file will not be publicly accessible and will
 // need to utilize aws credentials on the machine.
-func ReadNgcFile(path string) ([]byte, error) {
+func ReadFile(path string) ([]byte, error) {
 	// Users should be using virtual-hosted style:
 	// http://[bucket].s3.amazonaws.com/[file]
 	if !strings.Contains(path, "s3.amazonaws.com") {
-		return nil, errors.Errorf("url did not point to a valid amazon s3 location or follow the virtual-hosted style of https://[bucket].[region].s3.amazonzws.com/[file]: %s", path)
+		return nil, errors.Errorf("url did not point to a valid amazon s3 location or follow the virtual-hosted style of https://[bucket].[region].s3.amazonaws.com/[file]: %s", path)
 	}
 	u, err := url.Parse(path)
 	if err != nil {
@@ -104,7 +104,7 @@ func ReadNgcFile(path string) ([]byte, error) {
 	}
 	sections := strings.Split(u.Hostname(), ".")
 	if len(sections) < 5 {
-		return nil, errors.Errorf("url did not point to a valid amazon s3 location or follow the virtual-hosted style of https://[bucket].[region].s3.amazonzws.com/[file]: %s", path)
+		return nil, errors.Errorf("url did not point to a valid amazon s3 location or follow the virtual-hosted style of https://[bucket].[region].s3.amazonaws.com/[file]: %s", path)
 	}
 	bucket := sections[0]
 	twig.Debugf("bucket: %s", bucket)
@@ -258,85 +258,6 @@ func parseHTTPError(code int) error {
 		twig.Debug("converting to EOF")
 		return io.EOF
 	}
-}
-
-var Directory = CloudDirectory{
-	"gs": map[string]bool{
-		"US": true,
-
-		"us-east1-b": true,
-		"us-east1-c": true,
-		"us-east1-d": true,
-
-		"us-east4-a": true,
-		"us-east4-b": true,
-		"us-east4-c": true,
-
-		"us-central1-a": true,
-		"us-central1-b": true,
-		"us-central1-c": true,
-		"us-central1-f": true,
-
-		"us-west1-a": true,
-		"us-west1-b": true,
-		"us-west1-c": true,
-	},
-	"s3": map[string]bool{
-		"us-east-1": true,
-	},
-}
-
-type CloudDirectory map[string]map[string]bool
-
-var IncorrectLocationMessage = `
-================
-gs.[region]
-================
-
-regions for gs:
-----------------
-
-US
-
-us-east1-b us-east1-c us-east1-d
-
-us-east4-a us-east4-b us-east4-c
-
-us-central1-a us-central1-b us-central1-c us-central1-f
-
-us-west1-a us-west1-b us-west1-c
-
-================
-s3.[region]
-================
-
-regions for s3:
-----------------
-
-us-east-1
-
-================
-For accessing files on ncbi, use the location ftp-ncbi
-================
-
-`
-
-func IsLocation(loc string) bool {
-	ll := strings.Split(loc, ".")
-	if len(ll) != 2 {
-		if loc == "ftp-ncbi" {
-			return true
-		}
-		return false
-	}
-	regions, ok := Directory[ll[0]]
-	if !ok {
-		return false
-	}
-	if _, ok := regions[ll[1]]; !ok {
-		return false
-	}
-	return true
 }
 
 func String(s string) *string {
