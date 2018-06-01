@@ -38,17 +38,19 @@ var (
 	location  string
 	accession string
 	ngcpath   string
+	filetype  string
 
 	endpoint             string
 	awsBatch, awsDefault int = 0, 50
 	gcpBatch, gcpDefault int = 0, 25
 
-	locationMsg  string = "Cloud provider and region where files should be located: [cloud.region].\nEnvironment Variable: [$DBGAP_LOCATION]"
-	accessionMsg string = "A list of accessions to mount or path to cart file. [\"SRR123,SRR456\" | local/cart/file | https://<bucket>.<region>.s3.amazonaws.com/<cart/file>].\nEnvironment Variable: [$DBGAP_ACCESSION]"
-	ngcMsg       string = "A path to an ngc file used to authorize access to accessions in DBGaP: [local/ngc/file | https://<bucket>.<region>.s3.amazonaws.com/<ngc/file>].\nEnvironment Variable: [$DBGAP_NGC]"
-	endpointMsg  string = "ADVANCED: Change the endpoint used to communicate with NIH API.\nEnvironment Variable: [$DBGAP_ENDPOINT]"
-	awsBatchMsg  string = "ADVANCED: Adjust the amount of accessions put in one request to the NIH API when using an AWS location.\nEnvironment Variable: [$DBGAP_AWS-BATCH]"
-	gcpBatchMsg  string = "ADVANCED: Adjust the amount of accessions put in one request to the NIH API when using a GCP location.\nEnvironment Variable: [$DBGAP_GCP-BATCH]"
+	locationMsg  = "Cloud provider and region where files should be located: [cloud.region].\nEnvironment Variable: [$DBGAP_LOCATION]"
+	accessionMsg = "A list of accessions to mount or path to cart file. [\"SRR123,SRR456\" | local/cart/file | https://<bucket>.<region>.s3.amazonaws.com/<cart/file>].\nEnvironment Variable: [$DBGAP_ACCESSION]"
+	ngcMsg       = "A path to an ngc file used to authorize access to accessions in DBGaP: [local/ngc/file | https://<bucket>.<region>.s3.amazonaws.com/<ngc/file>].\nEnvironment Variable: [$DBGAP_NGC]"
+	filetypeMsg  = "comma separated list of the only file types to copy.\nEnvironment Varible: [$DBGAP_FILETYPE]"
+	endpointMsg  = "ADVANCED: Change the endpoint used to communicate with NIH API.\nEnvironment Variable: [$DBGAP_ENDPOINT]"
+	awsBatchMsg  = "ADVANCED: Adjust the amount of accessions put in one request to the NIH API when using an AWS location.\nEnvironment Variable: [$DBGAP_AWS-BATCH]"
+	gcpBatchMsg  = "ADVANCED: Adjust the amount of accessions put in one request to the NIH API when using a GCP location.\nEnvironment Variable: [$DBGAP_GCP-BATCH]"
 )
 
 func init() {
@@ -60,6 +62,9 @@ func init() {
 
 	mountCmd.Flags().StringVarP(&ngcpath, "ngc", "n", "", ngcMsg)
 	viper.BindPFlag("ngc", mountCmd.Flags().Lookup("ngc"))
+
+	mountCmd.Flags().StringVarP(&filetype, "filetype", "f", "", filetypeMsg)
+	viper.BindPFlag("filetype", mountCmd.Flags().Lookup("filetype"))
 
 	mountCmd.Flags().StringVarP(&endpoint, "endpoint", "e", "https://www.ncbi.nlm.nih.gov/Traces/sdl/1/retrieve", endpointMsg)
 	viper.BindPFlag("endpoint", mountCmd.Flags().Lookup("endpoint"))
@@ -114,11 +119,19 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 			return errors.New("No location: A location was not provided so Fusera attempted to resolve the location itself. This feature is only supported when Fusera is running on Amazon or Google's cloud platforms.")
 		}
 	}
+	var types map[string]bool
+	if filetype != "" {
+		types, err = flags.ResolveFileType(filetype)
+		if err != nil {
+			return errors.New("Seems like something was wrong with the format of the filetype flag.")
+		}
+	}
 	uid, gid := myUserAndGroup()
 	opt := &fuseralib.Options{
-		Acc: accs,
-		Loc: location,
-		Ngc: ngc,
+		Acc:       accs,
+		Loc:       location,
+		Ngc:       ngc,
+		Filetypes: types,
 
 		ApiEndpoint: endpoint,
 		AwsBatch:    awsBatch,
@@ -167,6 +180,7 @@ func foldEnvVarsIntoFlagValues() {
 	resolveString("location", &location)
 	resolveString("accession", &accession)
 	resolveString("ngc", &ngcpath)
+	resolveString("filetype", &filetype)
 }
 
 func myUserAndGroup() (int, int) {

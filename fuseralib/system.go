@@ -38,10 +38,13 @@ import (
 	"github.com/jacobsa/fuse/fuseutil"
 )
 
+// Options is a collection of values that describe how Fusera should behave.
 type Options struct {
+	// The file used to authenticate with the SRA Data Locator API
 	Ngc         []byte
 	Acc         map[string]bool
 	Loc         string
+	Filetypes   map[string]bool
 	ApiEndpoint string
 	AwsBatch    int
 	GcpBatch    int
@@ -98,7 +101,7 @@ func NewFusera(ctx context.Context, opt *Options) (*Fusera, error) {
 	if strings.HasPrefix(opt.Loc, "gs") {
 		batch = opt.GcpBatch
 	}
-	accessions, err := nr.ResolveNames(opt.ApiEndpoint, opt.Loc, opt.Ngc, batch, opt.Acc)
+	accessions, err := nr.ResolveNames(opt.ApiEndpoint, opt.Loc, opt.Ngc, batch, opt.Acc, opt.Filetypes)
 	if err != nil {
 		fmt.Println(err.Error())
 		return nil, err

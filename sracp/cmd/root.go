@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -28,6 +27,7 @@ import (
 	"github.com/mattrbianchi/twig"
 	"github.com/mitre/fusera/flags"
 	"github.com/mitre/fusera/nr"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -114,11 +114,11 @@ var rootCmd = &cobra.Command{
 		if filetype != "" {
 			types, err = flags.ResolveFileType(filetype)
 			if err != nil {
-				return errors.New("Seems like something was wrong with the format of the filetype flag.")
+				return errors.Errorf("could not parse contents of filetype flag: %s", filetype)
 			}
 		}
 		path := args[0]
-		accs, err := nr.ResolveNames(endpoint, location, ngc, 1, resolvedAccessions)
+		accs, err := nr.ResolveNames(endpoint, location, ngc, 1, resolvedAccessions, types)
 		if err != nil {
 			return err
 		}
@@ -134,7 +134,8 @@ var rootCmd = &cobra.Command{
 				continue
 			}
 			for _, f := range v.Files {
-				if filetype != "" {
+				// Defensive programming: if the API returns filetypes the user didn't want, still don't copy them.
+				if types != nil {
 					if _, ok := types[f.Type]; !ok {
 						continue
 					}
@@ -143,7 +144,9 @@ var rootCmd = &cobra.Command{
 				// If so, print out error message saying such, refuse to use curl, and move on.
 				var stat syscall.Statfs_t
 				wd, err := os.Getwd()
-				syscall.Statfs(wd, &stat)
+				if err := syscall.Statfs(wd, &stat); err != nil {
+					return err
+				}
 
 				// Available blocks * size per block = available space in bytes
 				availableBytes := stat.Bavail * uint64(stat.Bsize)
@@ -172,6 +175,7 @@ var rootCmd = &cobra.Command{
 	},
 }
 
+// Execute runs the root command of sracp, which copies files from the cloud to a local file system.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
@@ -188,6 +192,7 @@ func foldEnvVarsIntoFlagValues() {
 	resolveString("location", &location)
 	resolveString("accession", &accession)
 	resolveString("ngc", &ngcpath)
+	resolveString("filetype", &filetype)
 }
 
 func resolveString(name string, value *string) {

@@ -81,12 +81,13 @@ func makeBatchRequest(url string, writer *multipart.Writer, body io.Reader) ([]P
 	return payload, nil
 }
 
+// ResolveNames uses the SRA Data Locator API to retrieve file
 // url: the endpoint for ResolveNames to use, otherwise default will be used.
 // loc: the location to request the files to be in.
 // ngc: the bytes that represent an ngc file, authorizing access to accessions
 // batch: the number of accessions to ask for at once in one request.
 // accs: the accessions to resolve names for.
-func ResolveNames(url, loc string, ngc []byte, batch int, accs map[string]bool) (map[string]*Accession, error) {
+func ResolveNames(url, loc string, ngc []byte, batch int, accs map[string]bool, types map[string]bool) (map[string]*Accession, error) {
 	if accs == nil {
 		return nil, errors.New("must provide accessions to pass to Name Resolver API")
 	}
@@ -108,13 +109,13 @@ func ResolveNames(url, loc string, ngc []byte, batch int, accs map[string]bool) 
 	totalAccs := len(accs)
 	var currentAccsInBatch []string
 	twig.Debugf("total accs: %d", totalAccs)
-	for acc, _ := range accs {
+	for acc := range accs {
 		batchCount++
 		totalCount++
 		if batchCount == 1 {
 			body = &bytes.Buffer{}
 			writer = multipart.NewWriter(body)
-			if err := writeFields(writer, ngc, loc); err != nil {
+			if err := writeFields(writer, ngc, loc, types); err != nil {
 				return nil, err
 			}
 			currentAccsInBatch = make([]string, 0, batch)
@@ -233,7 +234,10 @@ type File struct {
 	Service        string    `json:"service,omitempty"`
 }
 
-func writeFields(writer *multipart.Writer, ngc []byte, loc string) error {
+func writeFields(writer *multipart.Writer, ngc []byte, loc string, types map[string]bool) error {
+	if err := writer.WriteField("location", loc); err != nil {
+		return errors.New("could not write loc field to multipart.Writer")
+	}
 	if ngc != nil {
 		// handle ngc bytes
 		part, err := writer.CreateFormFile("ngc", "ngc")
@@ -246,14 +250,15 @@ func writeFields(writer *multipart.Writer, ngc []byte, loc string) error {
 		}
 
 	}
-	if err := writer.WriteField("version", "xc-1.0"); err != nil {
-		return errors.New("could not write version field to multipart.Writer")
-	}
-	if err := writer.WriteField("format", "json"); err != nil {
-		return errors.New("could not write format field to multipart.Writer")
-	}
-	if err := writer.WriteField("location", loc); err != nil {
-		return errors.New("could not write loc field to multipart.Writer")
+	if types != nil {
+		tt := make([]string, 0)
+		for k := range types {
+			tt = append(tt, k)
+		}
+		typesField := strings.Join(tt, ",")
+		if err := writer.WriteField("filetype", typesField); err != nil {
+			return errors.New("could not write filetype field to multipart.Writer")
+		}
 	}
 	return nil
 }
