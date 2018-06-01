@@ -19,7 +19,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/signal"
 	"os/user"
@@ -28,7 +27,7 @@ import (
 	"syscall"
 
 	"github.com/mattrbianchi/twig"
-	"github.com/mitre/fusera/awsutil"
+	"github.com/mitre/fusera/flags"
 	"github.com/mitre/fusera/fuseralib"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -91,7 +90,7 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 	twig.Debug("accessions: " + accession)
 	var ngc []byte
 	if ngcpath != "" {
-		ngc, err = resolveNgcFile(ngcpath)
+		ngc, err = flags.ResolveNgcFile(ngcpath)
 		if err != nil {
 			return err
 		}
@@ -100,7 +99,7 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 		return errors.New("No accessions provided: Fusera needs a list of accessions in order to know what files to provide in its file system.")
 	}
 	// Now resolveAccession's value
-	accs, err := resolveAccession(accession)
+	accs, err := flags.ResolveAccession(accession)
 	if err != nil {
 		return err
 	}
@@ -109,7 +108,7 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 
 	// Location takes longest if there's a failure, so validate it last.
 	if location == "" {
-		location, err = resolveLocation()
+		location, err = flags.ResolveLocation()
 		if err != nil {
 			twig.Debug(err)
 			return errors.New("No location: A location was not provided so Fusera attempted to resolve the location itself. This feature is only supported when Fusera is running on Amazon or Google's cloud platforms.")
@@ -159,79 +158,6 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 	}
 
 	return nil
-}
-
-// Attempt to resolve the location on GCP and AWS.
-// If location cannot be resolved, return error.
-func resolveLocation() (string, error) {
-	loc, err := awsutil.ResolveRegion()
-	if err != nil {
-		return "", err
-	}
-	return loc, nil
-}
-
-// If a list of comma separated accessions was provided, use it.
-// Otherwise, if a path to a cart file was given, deduce whether it's on s3 or local.
-// Either way, attempt to read the file and make a map of unique accessions.
-func resolveAccession(acc string) (map[string]bool, error) {
-	var accessions = make(map[string]bool)
-	if strings.HasPrefix(acc, "http") {
-		// we were given a url on s3.
-		data, err := awsutil.ReadFile(acc)
-		if err != nil {
-			return nil, errors.Wrapf(err, "couldn't open cart file at: %s", acc)
-		}
-		acc = string(data)
-	} else if fileExists(acc) {
-		data, err := ioutil.ReadFile(acc)
-		if err != nil {
-			return nil, errors.Wrapf(err, "couldn't open cart file at: %s", acc)
-		}
-		acc = string(data)
-	}
-	// Now process acc
-	aa := strings.FieldsFunc(acc, parseAccessions)
-	var empty = true
-	for _, a := range aa {
-		if a != "" {
-			empty = false
-			accessions[a] = true
-		}
-	}
-	if empty {
-		return nil, errors.Errorf("No accessions were found in the content given to the --accession flag. --accession: %s.", acc)
-	}
-
-	return accessions, nil
-}
-
-func parseAccessions(r rune) bool {
-	return r == '\n' || r == '\t' || r == ',' || r == ' '
-}
-
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return !os.IsNotExist(err)
-}
-
-// Deduce whether path is on s3 or local.
-// Either way, read all of the file into a byte slice.
-func resolveNgcFile(ngcpath string) (data []byte, err error) {
-	// we were given a path to an ngc file. Let's read it.
-	if strings.HasPrefix(ngcpath, "http") {
-		// we were given a url on s3.
-		data, err = awsutil.ReadFile(ngcpath)
-		if err != nil {
-			return nil, errors.Wrapf(err, "couldn't open ngc file at: %s", ngcpath)
-		}
-	} else {
-		data, err = ioutil.ReadFile(ngcpath)
-		if err != nil {
-			return nil, errors.Wrapf(err, "couldn't open ngc file at: %s", ngcpath)
-		}
-	}
-	return
 }
 
 func foldEnvVarsIntoFlagValues() {
