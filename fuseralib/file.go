@@ -256,7 +256,18 @@ func (fh *FileHandle) readFromStream(offset int64, buf []byte) (bytesRead int, e
 			// TODO: with new API behavior, this behavior changes.
 			// Public files still don't get links, but now every time starts off as
 			// IsZero. So this is fun.
-			if fh.inode.Link == "" || (!exp.IsZero() && time.Until(exp) < sd) {
+			if fh.inode.Link == "" {
+				// we need to get a link no matter what
+				twig.Debugf("seems like we don't have a url for: %s", fh.inode.Name)
+				link, expiration, err := newURL(fh.inode)
+				if err != nil {
+					// fh.inode.logFuse("< readFromStream error", 0, err)
+					return 0, syscall.EACCES
+				}
+				fh.inode.Link = link
+				fh.inode.Attributes.ExpirationDate = expiration
+			} else if !exp.IsZero() && time.Until(exp) < sd {
+				// so the expiration date isn't zero and it's about to expire
 				twig.Debugf("seems like we have a url that expires: %s", exp)
 				if time.Until(exp) < sd {
 					twig.Debug("url is expired")
