@@ -87,7 +87,11 @@ func makeBatchRequest(url string, writer *multipart.Writer, body io.Reader) ([]P
 // ngc: the bytes that represent an ngc file, authorizing access to accessions
 // batch: the number of accessions to ask for at once in one request.
 // accs: the accessions to resolve names for.
-func ResolveNames(url, loc string, ngc []byte, batch int, accs map[string]bool, types map[string]bool) (map[string]*Accession, error) {
+// TODO: break this into three functions
+// BatchSignURLs: needs batch param, means meta=false
+// BatchGetMetadata: needs batch param, means meta=true
+// SignURL: only one acc, meta=false. for resigning urls
+func ResolveNames(url string, batch int, meta bool, loc string, ngc []byte, accs, types map[string]bool) (map[string]*Accession, error) {
 	if accs == nil {
 		return nil, errors.New("must provide accessions to pass to Name Resolver API")
 	}
@@ -115,7 +119,7 @@ func ResolveNames(url, loc string, ngc []byte, batch int, accs map[string]bool, 
 		if batchCount == 1 {
 			body = &bytes.Buffer{}
 			writer = multipart.NewWriter(body)
-			if err := writeFields(writer, ngc, loc, types); err != nil {
+			if err := writeFields(writer, meta, ngc, loc, types); err != nil {
 				return nil, err
 			}
 			currentAccsInBatch = make([]string, 0, batch)
@@ -234,9 +238,14 @@ type File struct {
 	Service        string    `json:"service,omitempty"`
 }
 
-func writeFields(writer *multipart.Writer, ngc []byte, loc string, types map[string]bool) error {
+func writeFields(writer *multipart.Writer, meta bool, ngc []byte, loc string, types map[string]bool) error {
 	if err := writer.WriteField("location", loc); err != nil {
 		return errors.New("could not write loc field to multipart.Writer")
+	}
+	if meta {
+		if err := writer.WriteField("meta-only", "yes"); err != nil {
+			return errors.New("could not write meta-only field to multipart.Writer")
+		}
 	}
 	if ngc != nil {
 		// handle ngc bytes

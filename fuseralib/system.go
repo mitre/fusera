@@ -101,7 +101,8 @@ func NewFusera(ctx context.Context, opt *Options) (*Fusera, error) {
 	if strings.HasPrefix(opt.Loc, "gs") {
 		batch = opt.GcpBatch
 	}
-	accessions, err := nr.ResolveNames(opt.ApiEndpoint, opt.Loc, opt.Ngc, batch, opt.Acc, opt.Filetypes)
+	metaOnly := true
+	accessions, err := nr.ResolveNames(opt.ApiEndpoint, batch, metaOnly, opt.Loc, opt.Ngc, opt.Acc, opt.Filetypes)
 	if err != nil {
 		fmt.Println(err.Error())
 		return nil, err

@@ -118,7 +118,7 @@ var rootCmd = &cobra.Command{
 			}
 		}
 		path := args[0]
-		accs, err := nr.ResolveNames(endpoint, location, ngc, 1, resolvedAccessions, types)
+		accs, err := nr.ResolveNames(endpoint, 25, false, location, ngc, resolvedAccessions, types)
 		if err != nil {
 			return err
 		}
