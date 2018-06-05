@@ -21,6 +21,7 @@ import (
 	"os"
 
 	"github.com/mattrbianchi/twig"
+	"github.com/mitre/fusera/flags"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -31,9 +32,11 @@ var (
 
 func init() {
 	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "Enable debug output.")
-	viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
+	if err := viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug")); err != nil {
+		panic("INTERNAL ERROR: could not bind debug flag to debug environment variable")
+	}
 
-	viper.SetEnvPrefix("dbgap")
+	viper.SetEnvPrefix(flags.EnvPrefix)
 	viper.AutomaticEnv()
 }
 

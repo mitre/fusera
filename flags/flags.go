@@ -1,6 +1,7 @@
 package flags
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -11,6 +12,16 @@ import (
 )
 
 var (
+	EnvPrefix = "dbgap"
+
+	LocationName  = "location"
+	AccessionName = "accession"
+	NgcName       = "ngc"
+	FiletypeName  = "filetype"
+	EndpointName  = "endpoint"
+	AwsBatchName  = "aws-batch"
+	GcpBatchName  = "gcp-batch"
+
 	LocationMsg  = "Cloud provider and region where files should be located: [cloud.region].\nEnvironment Variable: [$DBGAP_LOCATION]"
 	AccessionMsg = "A list of accessions to mount or path to cart file. [\"SRR123,SRR456\" | local/cart/file | https://<bucket>.<region>.s3.amazonaws.com/<cart/file>].\nEnvironment Variable: [$DBGAP_ACCESSION]"
 	NgcMsg       = "A path to an ngc file used to authorize access to accessions in DBGaP: [local/ngc/file | https://<bucket>.<region>.s3.amazonaws.com/<ngc/file>].\nEnvironment Variable: [$DBGAP_NGC]"
@@ -114,7 +125,11 @@ func ResolveString(name string, value *string) {
 	if value == nil {
 		return
 	}
-	if !viper.IsSet(name) {
+	fmt.Println("checking if viper things stuff is set")
+	fmt.Println(name)
+	fmt.Println(viper.IsSet(name))
+	fmt.Println(viper.GetString(name))
+	if viper.IsSet(name) {
 		env := viper.GetString(name)
 		if env != "" {
 			*value = env
@@ -126,10 +141,20 @@ func ResolveInt(name string, value *int) {
 	if value == nil {
 		return
 	}
-	if !viper.IsSet(name) {
+	if viper.IsSet(name) {
 		env := viper.GetInt(name)
 		if env != 0 {
 			*value = env
 		}
+	}
+}
+
+func ResolveBool(name string, value *bool) {
+	if value == nil {
+		return
+	}
+	if viper.IsSet(name) {
+		env := viper.GetBool(name)
+		*value = env
 	}
 }

@@ -45,6 +45,7 @@ type Options struct {
 	Acc         map[string]bool
 	Loc         string
 	Filetypes   map[string]bool
+	Eager       bool
 	ApiEndpoint string
 	AwsBatch    int
 	GcpBatch    int
@@ -101,8 +102,7 @@ func NewFusera(ctx context.Context, opt *Options) (*Fusera, error) {
 	if strings.HasPrefix(opt.Loc, "gs") {
 		batch = opt.GcpBatch
 	}
-	metaOnly := true
-	accessions, err := nr.ResolveNames(opt.ApiEndpoint, batch, metaOnly, opt.Loc, opt.Ngc, opt.Acc, opt.Filetypes)
+	accessions, err := nr.ResolveNames(opt.ApiEndpoint, batch, !opt.Eager, opt.Loc, opt.Ngc, opt.Acc, opt.Filetypes)
 	if err != nil {
 		fmt.Println(err.Error())
 		return nil, err

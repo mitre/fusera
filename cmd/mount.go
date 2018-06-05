@@ -43,6 +43,7 @@ var (
 	endpoint             string
 	awsBatch, awsDefault int = 0, 50
 	gcpBatch, gcpDefault int = 0, 25
+	eager                bool
 )
 
 func init() {
@@ -73,11 +74,16 @@ func init() {
 
 	mountCmd.Flags().IntVarP(&awsBatch, "aws-batch", "", awsDefault, flags.AwsBatchMsg)
 	if err := viper.BindPFlag("aws-batch", mountCmd.Flags().Lookup("aws-batch")); err != nil {
-		panic("INTERNAL ERROR: could not bind aw-batch flag to aw-batch environment variable")
+		panic("INTERNAL ERROR: could not bind aws-batch flag to aws-batch environment variable")
 	}
 
 	mountCmd.Flags().IntVarP(&gcpBatch, "gcp-batch", "", gcpDefault, flags.GcpBatchMsg)
 	if err := viper.BindPFlag("gcp-batch", mountCmd.Flags().Lookup("gcp-batch")); err != nil {
+		panic("INTERNAL ERROR: could not bind gcp-batch flag to gcp-batch environment variable")
+	}
+
+	mountCmd.Flags().BoolVarP(&eager, "eager", "", false, "ADVANCED: Have fusera request that urls be signed by the API on start up.\nEnvironment Variable: [$DBGAP_EAGER]")
+	if err := viper.BindPFlag("eager", mountCmd.Flags().Lookup("eager")); err != nil {
 		panic("INTERNAL ERROR: could not bind gcp-batch flag to gcp-batch environment variable")
 	}
 
@@ -138,6 +144,7 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 		Loc:       location,
 		Ngc:       ngc,
 		Filetypes: types,
+		Eager:     eager,
 
 		ApiEndpoint: endpoint,
 		AwsBatch:    awsBatch,
@@ -183,6 +190,7 @@ func foldEnvVarsIntoFlagValues() {
 	flags.ResolveString("endpoint", &endpoint)
 	flags.ResolveInt("aws-batch", &awsBatch)
 	flags.ResolveInt("gcp-batch", &gcpBatch)
+	flags.ResolveBool("eager", &eager)
 	flags.ResolveString("location", &location)
 	flags.ResolveString("accession", &accession)
 	flags.ResolveString("ngc", &ngcpath)
