@@ -7,9 +7,20 @@ import (
 
 	"github.com/mitre/fusera/awsutil"
 	"github.com/pkg/errors"
+	"github.com/spf13/viper"
 )
 
-// Attempt to resolve the location on GCP and AWS.
+var (
+	LocationMsg  = "Cloud provider and region where files should be located: [cloud.region].\nEnvironment Variable: [$DBGAP_LOCATION]"
+	AccessionMsg = "A list of accessions to mount or path to cart file. [\"SRR123,SRR456\" | local/cart/file | https://<bucket>.<region>.s3.amazonaws.com/<cart/file>].\nEnvironment Variable: [$DBGAP_ACCESSION]"
+	NgcMsg       = "A path to an ngc file used to authorize access to accessions in DBGaP: [local/ngc/file | https://<bucket>.<region>.s3.amazonaws.com/<ngc/file>].\nEnvironment Variable: [$DBGAP_NGC]"
+	FiletypeMsg  = "comma separated list of the only file types to copy.\nEnvironment Varible: [$DBGAP_FILETYPE]"
+	EndpointMsg  = "ADVANCED: Change the endpoint used to communicate with SDL API.\nEnvironment Variable: [$DBGAP_ENDPOINT]"
+	AwsBatchMsg  = "ADVANCED: Adjust the amount of accessions put in one request to the SDL API when using an AWS location.\nEnvironment Variable: [$DBGAP_AWS-BATCH]"
+	GcpBatchMsg  = "ADVANCED: Adjust the amount of accessions put in one request to the SDL API when using a GCP location.\nEnvironment Variable: [$DBGAP_GCP-BATCH]"
+)
+
+// ResolveLocation attempts to resolve the location on GCP and AWS.
 // If location cannot be resolved, return error.
 func ResolveLocation() (string, error) {
 	loc, err := awsutil.ResolveRegion()
@@ -97,4 +108,28 @@ func ResolveFileType(filetype string) (map[string]bool, error) {
 		return uniqTypes, nil
 	}
 	return nil, errors.New("")
+}
+
+func ResolveString(name string, value *string) {
+	if value == nil {
+		return
+	}
+	if !viper.IsSet(name) {
+		env := viper.GetString(name)
+		if env != "" {
+			*value = env
+		}
+	}
+}
+
+func ResolveInt(name string, value *int) {
+	if value == nil {
+		return
+	}
+	if !viper.IsSet(name) {
+		env := viper.GetInt(name)
+		if env != 0 {
+			*value = env
+		}
+	}
 }

@@ -43,37 +43,43 @@ var (
 	endpoint             string
 	awsBatch, awsDefault int = 0, 50
 	gcpBatch, gcpDefault int = 0, 25
-
-	locationMsg  = "Cloud provider and region where files should be located: [cloud.region].\nEnvironment Variable: [$DBGAP_LOCATION]"
-	accessionMsg = "A list of accessions to mount or path to cart file. [\"SRR123,SRR456\" | local/cart/file | https://<bucket>.<region>.s3.amazonaws.com/<cart/file>].\nEnvironment Variable: [$DBGAP_ACCESSION]"
-	ngcMsg       = "A path to an ngc file used to authorize access to accessions in DBGaP: [local/ngc/file | https://<bucket>.<region>.s3.amazonaws.com/<ngc/file>].\nEnvironment Variable: [$DBGAP_NGC]"
-	filetypeMsg  = "comma separated list of the only file types to copy.\nEnvironment Varible: [$DBGAP_FILETYPE]"
-	endpointMsg  = "ADVANCED: Change the endpoint used to communicate with NIH API.\nEnvironment Variable: [$DBGAP_ENDPOINT]"
-	awsBatchMsg  = "ADVANCED: Adjust the amount of accessions put in one request to the NIH API when using an AWS location.\nEnvironment Variable: [$DBGAP_AWS-BATCH]"
-	gcpBatchMsg  = "ADVANCED: Adjust the amount of accessions put in one request to the NIH API when using a GCP location.\nEnvironment Variable: [$DBGAP_GCP-BATCH]"
 )
 
 func init() {
-	mountCmd.Flags().StringVarP(&location, "location", "l", "", locationMsg)
-	viper.BindPFlag("location", mountCmd.Flags().Lookup("location"))
+	mountCmd.Flags().StringVarP(&location, "location", "l", "", flags.LocationMsg)
+	if err := viper.BindPFlag("location", mountCmd.Flags().Lookup("location")); err != nil {
+		panic("INTERNAL ERROR: could not bind location flag to location environment variable")
+	}
 
-	mountCmd.Flags().StringVarP(&accession, "accession", "a", "", accessionMsg)
-	viper.BindPFlag("accession", mountCmd.Flags().Lookup("accession"))
+	mountCmd.Flags().StringVarP(&accession, "accession", "a", "", flags.AccessionMsg)
+	if err := viper.BindPFlag("accession", mountCmd.Flags().Lookup("accession")); err != nil {
+		panic("INTERNAL ERROR: could not bind accession flag to accession environment variable")
+	}
 
-	mountCmd.Flags().StringVarP(&ngcpath, "ngc", "n", "", ngcMsg)
-	viper.BindPFlag("ngc", mountCmd.Flags().Lookup("ngc"))
+	mountCmd.Flags().StringVarP(&ngcpath, "ngc", "n", "", flags.NgcMsg)
+	if err := viper.BindPFlag("ngc", mountCmd.Flags().Lookup("ngc")); err != nil {
+		panic("INTERNAL ERROR: could not bind ngc flag to ngc environment variable")
+	}
 
-	mountCmd.Flags().StringVarP(&filetype, "filetype", "f", "", filetypeMsg)
-	viper.BindPFlag("filetype", mountCmd.Flags().Lookup("filetype"))
+	mountCmd.Flags().StringVarP(&filetype, "filetype", "f", "", flags.FiletypeMsg)
+	if err := viper.BindPFlag("filetype", mountCmd.Flags().Lookup("filetype")); err != nil {
+		panic("INTERNAL ERROR: could not bind filetype flag to filetype environment variable")
+	}
 
-	mountCmd.Flags().StringVarP(&endpoint, "endpoint", "e", "https://www.ncbi.nlm.nih.gov/Traces/sdl/1/retrieve", endpointMsg)
-	viper.BindPFlag("endpoint", mountCmd.Flags().Lookup("endpoint"))
+	mountCmd.Flags().StringVarP(&endpoint, "endpoint", "e", "https://www.ncbi.nlm.nih.gov/Traces/sdl/1/retrieve", flags.EndpointMsg)
+	if err := viper.BindPFlag("endpoint", mountCmd.Flags().Lookup("endpoint")); err != nil {
+		panic("INTERNAL ERROR: could not bind endpoint flag to endpoint environment variable")
+	}
 
-	mountCmd.Flags().IntVarP(&awsBatch, "aws-batch", "", awsDefault, awsBatchMsg)
-	viper.BindPFlag("aws-batch", mountCmd.Flags().Lookup("aws-batch"))
+	mountCmd.Flags().IntVarP(&awsBatch, "aws-batch", "", awsDefault, flags.AwsBatchMsg)
+	if err := viper.BindPFlag("aws-batch", mountCmd.Flags().Lookup("aws-batch")); err != nil {
+		panic("INTERNAL ERROR: could not bind aw-batch flag to aw-batch environment variable")
+	}
 
-	mountCmd.Flags().IntVarP(&gcpBatch, "gcp-batch", "", gcpDefault, gcpBatchMsg)
-	viper.BindPFlag("gcp-batch", mountCmd.Flags().Lookup("gcp-batch"))
+	mountCmd.Flags().IntVarP(&gcpBatch, "gcp-batch", "", gcpDefault, flags.GcpBatchMsg)
+	if err := viper.BindPFlag("gcp-batch", mountCmd.Flags().Lookup("gcp-batch")); err != nil {
+		panic("INTERNAL ERROR: could not bind gcp-batch flag to gcp-batch environment variable")
+	}
 
 	rootCmd.AddCommand(mountCmd)
 }
@@ -174,13 +180,13 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 }
 
 func foldEnvVarsIntoFlagValues() {
-	resolveString("endpoint", &endpoint)
-	resolveInt("aws-batch", &awsBatch)
-	resolveInt("gcp-batch", &gcpBatch)
-	resolveString("location", &location)
-	resolveString("accession", &accession)
-	resolveString("ngc", &ngcpath)
-	resolveString("filetype", &filetype)
+	flags.ResolveString("endpoint", &endpoint)
+	flags.ResolveInt("aws-batch", &awsBatch)
+	flags.ResolveInt("gcp-batch", &gcpBatch)
+	flags.ResolveString("location", &location)
+	flags.ResolveString("accession", &accession)
+	flags.ResolveString("ngc", &ngcpath)
+	flags.ResolveString("filetype", &filetype)
 }
 
 func myUserAndGroup() (int, int) {
@@ -197,30 +203,6 @@ func myUserAndGroup() (int, int) {
 		panic(errors.Wrapf(err, "Parsing GID (%s)", user.Gid))
 	}
 	return int(uid64), int(gid64)
-}
-
-func resolveInt(name string, value *int) {
-	if value == nil {
-		return
-	}
-	if !viper.IsSet(name) {
-		env := viper.GetInt(name)
-		if env != 0 {
-			*value = env
-		}
-	}
-}
-
-func resolveString(name string, value *string) {
-	if value == nil {
-		return
-	}
-	if !viper.IsSet(name) {
-		env := viper.GetString(name)
-		if env != "" {
-			*value = env
-		}
-	}
 }
 
 func registerSIGINTHandler(fs *fuseralib.Fusera, mountPoint string) {

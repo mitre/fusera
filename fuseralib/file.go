@@ -239,7 +239,7 @@ func (fh *FileHandle) Release() {
 		panic(fh.inode.fileHandles)
 	}
 
-	fh.inode.fileHandles -= 1
+	fh.inode.fileHandles--
 }
 
 // Returns the number of bytes read and a file error if one occured.
@@ -253,7 +253,10 @@ func (fh *FileHandle) readFromStream(offset int64, buf []byte) (bytesRead int, e
 		if fh.inode.ErrContents == "" {
 			sd, _ := time.ParseDuration("30s")
 			exp := fh.inode.Attributes.ExpirationDate
-			if !exp.IsZero() {
+			// TODO: with new API behavior, this behavior changes.
+			// Public files still don't get links, but now every time starts off as
+			// IsZero. So this is fun.
+			if fh.inode.Link == "" || (!exp.IsZero() && time.Until(exp) < sd) {
 				twig.Debugf("seems like we have a url that expires: %s", exp)
 				if time.Until(exp) < sd {
 					twig.Debug("url is expired")

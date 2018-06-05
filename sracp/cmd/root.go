@@ -40,33 +40,51 @@ var (
 	ngcpath   string
 	filetype  string
 
-	endpoint string
-
-	locationMsg  string = "Cloud provider and region where files should be located: [cloud.region].\nEnvironment Variable: [$DBGAP_LOCATION]"
-	accessionMsg string = "A list of accessions to mount or path to cart file. [\"SRR123,SRR456\" | local/cart/file | https://<bucket>.<region>.s3.amazonaws.com/<cart/file>].\nEnvironment Variable: [$DBGAP_ACCESSION]"
-	ngcMsg       string = "A path to an ngc file used to authorize access to accessions in DBGaP: [local/ngc/file | https://<bucket>.<region>.s3.amazonaws.com/<ngc/file>].\nEnvironment Variable: [$DBGAP_NGC]"
-	filetypeMsg  string = "comma separated list of the only file types to copy.\nEnvironment Varible: [$DBGAP_FILETYPE]"
-	endpointMsg  string = "ADVANCED: Change the endpoint used to communicate with NIH API.\nEnvironment Variable: [$DBGAP_ENDPOINT]"
+	endpoint             string
+	awsBatch, awsDefault int = 0, 50
+	gcpBatch, gcpDefault int = 0, 25
 )
 
 func init() {
 	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "Enable debug output.")
-	viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
+	if err := viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug")); err != nil {
+		panic("INTERNAL ERROR: could not bind debug flag to debug environment variable")
+	}
 
-	rootCmd.Flags().StringVarP(&location, "location", "l", "", locationMsg)
-	viper.BindPFlag("location", rootCmd.Flags().Lookup("location"))
+	rootCmd.Flags().StringVarP(&location, "location", "l", "", flags.LocationMsg)
+	if err := viper.BindPFlag("location", rootCmd.Flags().Lookup("location")); err != nil {
+		panic("INTERNAL ERROR: could not bind location flag to location environment variable")
+	}
 
-	rootCmd.Flags().StringVarP(&accession, "accession", "a", "", accessionMsg)
-	viper.BindPFlag("accession", rootCmd.Flags().Lookup("accession"))
+	rootCmd.Flags().StringVarP(&accession, "accession", "a", "", flags.AccessionMsg)
+	if err := viper.BindPFlag("accession", rootCmd.Flags().Lookup("accession")); err != nil {
+		panic("INTERNAL ERROR: could not bind accession flag to accession environment variable")
+	}
 
-	rootCmd.Flags().StringVarP(&ngcpath, "ngc", "n", "", ngcMsg)
-	viper.BindPFlag("ngc", rootCmd.Flags().Lookup("ngc"))
+	rootCmd.Flags().StringVarP(&ngcpath, "ngc", "n", "", flags.NgcMsg)
+	if err := viper.BindPFlag("ngc", rootCmd.Flags().Lookup("ngc")); err != nil {
+		panic("INTERNAL ERROR: could not bind ngc flag to ngc environment variable")
+	}
 
-	rootCmd.Flags().StringVarP(&filetype, "filetype", "f", "", filetypeMsg)
-	viper.BindPFlag("filetype", rootCmd.Flags().Lookup("filetype"))
+	rootCmd.Flags().StringVarP(&filetype, "filetype", "f", "", flags.FiletypeMsg)
+	if err := viper.BindPFlag("filetype", rootCmd.Flags().Lookup("filetype")); err != nil {
+		panic("INTERNAL ERROR: could not bind filetype flag to filetype environment variable")
+	}
 
-	rootCmd.Flags().StringVarP(&endpoint, "endpoint", "e", "https://www.ncbi.nlm.nih.gov/Traces/sdl/1/retrieve", endpointMsg)
-	viper.BindPFlag("endpoint", rootCmd.Flags().Lookup("endpoint"))
+	rootCmd.Flags().StringVarP(&endpoint, "endpoint", "e", "https://www.ncbi.nlm.nih.gov/Traces/sdl/1/retrieve", flags.EndpointMsg)
+	if err := viper.BindPFlag("endpoint", rootCmd.Flags().Lookup("endpoint")); err != nil {
+		panic("INTERNAL ERROR: could not bind endpoint flag to endpoint environment variable")
+	}
+
+	rootCmd.Flags().IntVarP(&awsBatch, "aws-batch", "", awsDefault, flags.AwsBatchMsg)
+	if err := viper.BindPFlag("aws-batch", rootCmd.Flags().Lookup("aws-batch")); err != nil {
+		panic("INTERNAL ERROR: could not bind aw-batch flag to aw-batch environment variable")
+	}
+
+	rootCmd.Flags().IntVarP(&gcpBatch, "gcp-batch", "", gcpDefault, flags.GcpBatchMsg)
+	if err := viper.BindPFlag("gcp-batch", rootCmd.Flags().Lookup("gcp-batch")); err != nil {
+		panic("INTERNAL ERROR: could not bind gcp-batch flag to gcp-batch environment variable")
+	}
 
 	viper.SetEnvPrefix("dbgap")
 	viper.AutomaticEnv()
@@ -183,26 +201,17 @@ func Execute() {
 	}
 }
 
+func foldEnvVarsIntoFlagValues() {
+	flags.ResolveString("endpoint", &endpoint)
+	flags.ResolveInt("aws-batch", &awsBatch)
+	flags.ResolveInt("gcp-batch", &gcpBatch)
+	flags.ResolveString("location", &location)
+	flags.ResolveString("accession", &accession)
+	flags.ResolveString("ngc", &ngcpath)
+	flags.ResolveString("filetype", &filetype)
+}
+
 func setConfig() {
 	// If debug flag gets set, print debug statements.
 	twig.SetDebug(debug)
-}
-
-func foldEnvVarsIntoFlagValues() {
-	resolveString("location", &location)
-	resolveString("accession", &accession)
-	resolveString("ngc", &ngcpath)
-	resolveString("filetype", &filetype)
-}
-
-func resolveString(name string, value *string) {
-	if value == nil {
-		return
-	}
-	if !viper.IsSet(name) {
-		env := viper.GetString(name)
-		if env != "" {
-			*value = env
-		}
-	}
 }

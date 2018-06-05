@@ -184,11 +184,12 @@ func sanitize(payload []Payload) (map[string]*Accession, error) {
 				accs[acc.ID] = acc
 				continue
 			}
-			if f.Link == "" {
-				acc.AppendError(fmt.Sprintf("API returned no link for file: %s\n", f.Name))
-				accs[acc.ID] = acc
-				continue
-			}
+			// Now, fusera can ask for meta-only and does so on start up so not having links can possibly be intended behavior.
+			// if f.Link == "" {
+			// 	acc.AppendError(fmt.Sprintf("API returned no link for file: %s\n", f.Name))
+			// 	accs[acc.ID] = acc
+			// 	continue
+			// }
 			// TODO: this is where we'll do HEAD calls on the files to check the validity of the URLs
 			acc.Files[f.Name] = f
 		}
