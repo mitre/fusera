@@ -19,11 +19,12 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"syscall"
+	"time"
 
+	"github.com/cavaliercoder/grab"
 	"github.com/mattrbianchi/twig"
 	"github.com/mitre/fusera/flags"
 	"github.com/mitre/fusera/nr"
@@ -140,17 +141,15 @@ var rootCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		_, err = exec.LookPath("curl")
-		if err != nil {
-			fmt.Println("Sracp cannot find the executable \"curl\" on the machine. Please install it and try again.")
-			return err
-		}
 		for _, v := range accs {
 			err := os.MkdirAll(filepath.Join(path, v.ID), 0755)
 			if err != nil {
 				fmt.Printf("Issue creating directory for %s: %s\n", v.ID, err.Error())
 				continue
 			}
+			// create a batch of urls to download and collect combined file size to still do disk check.
+			urls := make([]string, 0, len(accs))
+			var totalFileSize uint64
 			for _, f := range v.Files {
 				// Defensive programming: if the API returns filetypes the user didn't want, still don't copy them.
 				if types != nil {
@@ -158,36 +157,93 @@ var rootCmd = &cobra.Command{
 						continue
 					}
 				}
-				// Check available disk space and see if file is larger.
-				// If so, print out error message saying such, refuse to use curl, and move on.
-				var stat syscall.Statfs_t
-				wd, err := os.Getwd()
-				if err := syscall.Statfs(wd, &stat); err != nil {
-					return err
+				if f.Link == "" {
+					fmt.Printf("file: %s had no link, moving on to download other files\n", f.Name)
+					continue
 				}
-
-				// Available blocks * size per block = available space in bytes
-				availableBytes := stat.Bavail * uint64(stat.Bsize)
+				urls = append(urls, f.Link)
 				fileSize, err := strconv.ParseUint(f.Size, 10, 64)
 				if err != nil {
 					fmt.Printf("%s: %s: failed to parse file size in order to check if there's enough disk space to copy it. File size value was %s", v.ID, f.Name, f.Size)
 					continue
 				}
+				totalFileSize += fileSize
+			}
+			// Check available disk space and see if file is larger.
+			// If so, print out error message saying such, refuse to use curl, and move on.
+			var stat syscall.Statfs_t
+			wd, err := os.Getwd()
+			if err := syscall.Statfs(wd, &stat); err != nil {
+				return err
+			}
 
-				if availableBytes < fileSize {
-					fmt.Printf("DISK FULL: It appears there are only %d available bytes on disk and the file %s is %d bytes.", availableBytes, f.Name, fileSize)
-					continue
-				}
+			// Available blocks * size per block = available space in bytes
+			availableBytes := stat.Bavail * uint64(stat.Bsize)
+			if availableBytes < totalFileSize {
+				fmt.Printf("DISK FULL: It appears there are only %d available bytes on disk and the batch of files in accession %s is %d bytes.", availableBytes, v.ID, totalFileSize)
+				continue
+			}
 
-				// TODO: call libcurl on each url to the path specified
-				args := []string{"-o", filepath.Join(path, v.ID, f.Name), f.Link}
-				cmd := exec.Command("curl", args...)
-				cmd.Env = os.Environ()
-				err = cmd.Run()
-				if err != nil {
-					twig.Infof("Issue copying %s: %s\n", args[2], err.Error())
+			// TODO: use grab.GetBatch() to batch download all the files for an accession.
+			respch, err := grab.GetBatch(0, filepath.Join(path, v.ID), urls...)
+			if err != nil {
+				twig.Debugf("%v\n", err)
+			}
+			// start a ticker to update progress every 200ms
+			t := time.NewTicker(time.Second)
+
+			// monitor downloads
+			completed := 0
+			inProgress := 0
+			responses := make([]*grab.Response, 0)
+			for completed < len(urls) {
+				select {
+				case resp := <-respch:
+					// a new response has been received and has started downloading
+					// (nil is received once, when the channel is closed by grab)
+					if resp != nil {
+						responses = append(responses, resp)
+					}
+
+				case <-t.C:
+					// clear lines
+					if inProgress > 0 {
+						// fmt.Printf("\033[%dA\033[K", inProgress)
+					}
+
+					// update completed downloads
+					for i, resp := range responses {
+						if resp != nil && resp.IsComplete() {
+							// print final result
+							// if resp.Err() != nil {
+							// 	_, err := fmt.Fprintf(os.Stderr, "Error downloading %s: %v\n", resp.Request.URL(), resp.Err())
+							// 	if err != nil {
+							// 		panic("couldn't print error message for failed download")
+							// 	}
+							// } else {
+							// 	fmt.Printf("Finished %s %d / %d bytes (%d%%)\n", resp.Filename, resp.BytesComplete(), resp.Size, int(100*resp.Progress()))
+							// }
+
+							// mark completed
+							responses[i] = nil
+							completed++
+						}
+					}
+
+					// update downloads in progress
+					inProgress = 0
+					for _, resp := range responses {
+						if resp != nil && !resp.IsComplete() {
+							inProgress++
+							// fmt.Printf("Downloading %s %d / %d bytes (%d%%)\033[K\n", responses[i].Filename, responses[i].BytesComplete(), responses[i].Size, int(100*responses[i].Progress()))
+						}
+					}
 				}
 			}
+
+			t.Stop()
+
+			fmt.Printf("accession %s finished: %d file(s) successfully downloaded.\n", v.ID, len(urls))
 		}
 		return nil
 	},

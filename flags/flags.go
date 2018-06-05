@@ -1,7 +1,6 @@
 package flags
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -125,10 +124,6 @@ func ResolveString(name string, value *string) {
 	if value == nil {
 		return
 	}
-	fmt.Println("checking if viper things stuff is set")
-	fmt.Println(name)
-	fmt.Println(viper.IsSet(name))
-	fmt.Println(viper.GetString(name))
 	if viper.IsSet(name) {
 		env := viper.GetString(name)
 		if env != "" {
