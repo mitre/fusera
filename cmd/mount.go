@@ -14,16 +14,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package cmd
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/signal"
 	"os/user"
 	"strconv"
-	"strings"
 	"syscall"
 
 	"github.com/mattrbianchi/twig"
@@ -97,14 +96,11 @@ var mountCmd = &cobra.Command{
 	RunE:  mount,
 }
 
+// mount locates the files for each accession its given with the SDL API
+// and then mounts a FUSE system.
 func mount(cmd *cobra.Command, args []string) (err error) {
 	setConfig()
-	twig.Debug("got mount command")
-	twig.Debug("args:")
-	twig.Debug(args)
 	foldEnvVarsIntoFlagValues()
-	twig.Debug("location: " + location)
-	twig.Debug("accessions: " + accession)
 	var ngc []byte
 	if ngcpath != "" {
 		ngc, err = flags.ResolveNgcFile(ngcpath)
@@ -113,29 +109,35 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 		}
 	}
 	if accession == "" {
-		return errors.New("No accessions provided: Fusera needs a list of accessions in order to know what files to provide in its file system.")
+		return errors.New("no accessions provided")
 	}
-	// Now resolveAccession's value
 	accs, err := flags.ResolveAccession(accession)
 	if err != nil {
 		return err
-	}
-	// Validate mount point
-	// Do mount stuff
-
-	// Location takes longest if there's a failure, so validate it last.
-	if location == "" {
-		location, err = flags.ResolveLocation()
-		if err != nil {
-			twig.Debug(err)
-			return errors.New("No location: A location was not provided so Fusera attempted to resolve the location itself. This feature is only supported when Fusera is running on Amazon or Google's cloud platforms.")
-		}
 	}
 	var types map[string]bool
 	if filetype != "" {
 		types, err = flags.ResolveFileType(filetype)
 		if err != nil {
-			return errors.New("Seems like something was wrong with the format of the filetype flag.")
+			return err
+		}
+	}
+	// Validate the mount point before trying to mount to it.
+	// So it must exist
+	mountpoint := args[0]
+	if !flags.FileExists(mountpoint) {
+		return errors.New("mountpoint doesn't exist")
+	}
+	// So it must be readable
+	if !flags.HavePermissions(mountpoint) {
+		return errors.New("incorrect permissions for mountpoint")
+	}
+	// Location takes longest if there's a failure, so validate it last.
+	if location == "" {
+		location, err = flags.ResolveLocation()
+		if err != nil {
+			twig.Debug(err)
+			return errors.New("no location provided")
 		}
 	}
 	uid, gid := myUserAndGroup()
@@ -146,41 +148,30 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 		Filetypes: types,
 		Eager:     eager,
 
-		ApiEndpoint: endpoint,
+		APIEndpoint: endpoint,
 		AwsBatch:    awsBatch,
 		GcpBatch:    gcpBatch,
 
 		DirMode:  0555,
 		FileMode: 0444,
-		Uid:      uint32(uid),
-		Gid:      uint32(gid),
+		UID:      uint32(uid),
+		GID:      uint32(gid),
 		// TODO: won't need.
 		MountOptions:  make(map[string]string),
-		MountPoint:    args[0],
-		MountPointArg: args[0],
+		MountPoint:    mountpoint,
+		MountPointArg: mountpoint,
 	}
 	fs, mfs, err := fuseralib.Mount(context.Background(), opt)
 	if err != nil {
-		var msg string
-		if strings.Contains(err.Error(), "no such file or directory") {
-			msg = "Fusera failed to mount the file system.\nIt seems like the directory you want to mount to does not exist or you do not have correct permissions to access it. Please create the directory or correct the permissions on it before trying again."
-		}
-		if strings.Contains(err.Error(), "EOF") {
-			msg = "Fusera failed to mount the file system.\nIt seems like the directory you want to mount to is already mounted by fusera or another device. Choose another directory or try using the unmount command before trying again. Be considerate of the unmount command, if anything is using the device mounted while attempting to unmount, it will fail."
-		}
-		twig.Debugf("%+v\n", err)
-		return errors.New(msg)
+		return err
 	}
-	twig.Debug("File system has been successfully mounted.")
 	// Let the user unmount with Ctrl-C
 	registerSIGINTHandler(fs, opt.MountPoint)
 
 	// Wait for the file system to be unmounted.
 	err = mfs.Join(context.Background())
 	if err != nil {
-		fmt.Println("fusera encountered an internal issue, please rerun with the --debug flag to learn more.")
-		twig.Debugf("FATAL: MountedFileSystem.Join: %+#v\n", err)
-		os.Exit(1)
+		return errors.Wrap(err, "FATAL")
 	}
 
 	return nil

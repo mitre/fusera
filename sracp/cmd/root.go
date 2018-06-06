@@ -137,9 +137,12 @@ var rootCmd = &cobra.Command{
 			}
 		}
 		path := args[0]
-		accs, err := nr.ResolveNames(endpoint, 25, false, location, ngc, resolvedAccessions, types)
+		accs, report, err := nr.ResolveNames(endpoint, 25, false, location, ngc, resolvedAccessions, types)
 		if err != nil {
 			return err
+		}
+		if report != "" {
+			fmt.Println(report)
 		}
 		for _, v := range accs {
 			err := os.MkdirAll(filepath.Join(path, v.ID), 0755)

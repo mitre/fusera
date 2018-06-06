@@ -65,7 +65,7 @@ func NewDirHandle(inode *Inode) (dh *DirHandle) {
 
 func (inode *Inode) OpenDir() (dh *DirHandle) {
 	parent := inode.Parent
-	if parent != nil && inode.fs.opt.TypeCacheTTL != 0 {
+	if parent != nil {
 		parent.mu.Lock()
 		defer parent.mu.Unlock()
 
@@ -73,7 +73,7 @@ func (inode *Inode) OpenDir() (dh *DirHandle) {
 
 		if parent.dir.lastOpenDir == nil && num > 0 && *parent.dir.Children[0].Name == *inode.Name {
 			if parent.dir.seqOpenDirScore < 255 {
-				parent.dir.seqOpenDirScore += 1
+				parent.dir.seqOpenDirScore++
 			}
 			// 2.1) if I open a/a, a/'s score is now 2
 			// ie: handle the depth first search case
@@ -134,7 +134,6 @@ func (p sortedDirents) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
 // LOCKS_REQUIRED(dh.mu)
 func (dh *DirHandle) ReadDir(offset fuseops.DirOffset) (en *DirHandleEntry, err error) {
-	twig.Debug("dir.go/ReadDir called")
 	// If the request is for offset zero, we assume that either this is the first
 	// call or rewinddir has been called. Reset state.
 	if offset == 0 {

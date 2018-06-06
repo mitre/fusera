@@ -69,25 +69,20 @@ func ResolveAccession(acc string) (map[string]bool, error) {
 		}
 	}
 	if empty {
-		return nil, errors.Errorf("No accessions were found in the content given to the --accession flag. --accession: %s.", acc)
+		return nil, errors.New("cart file was empty")
 	}
 
 	return accessions, nil
 }
 
+// TODO: should be a private function
 func ParseAccessions(r rune) bool {
 	return r == '\n' || r == '\t' || r == ',' || r == ' '
-}
-
-func FileExists(path string) bool {
-	_, err := os.Stat(path)
-	return !os.IsNotExist(err)
 }
 
 // Deduce whether path is on s3 or local.
 // Either way, read all of the file into a byte slice.
 func ResolveNgcFile(ngcpath string) (data []byte, err error) {
-	// we were given a path to an ngc file. Let's read it.
 	if strings.HasPrefix(ngcpath, "http") {
 		// we were given a url on s3.
 		data, err = awsutil.ReadFile(ngcpath)
@@ -107,7 +102,7 @@ func ResolveFileType(filetype string) (map[string]bool, error) {
 	uniqTypes := make(map[string]bool)
 	types := strings.Split(filetype, ",")
 	if len(types) == 1 && types[0] == "" {
-		return nil, errors.New("")
+		return nil, errors.New("filetype was empty")
 	}
 	if len(types) > 0 {
 		for _, t := range types {
@@ -117,7 +112,17 @@ func ResolveFileType(filetype string) (map[string]bool, error) {
 		}
 		return uniqTypes, nil
 	}
-	return nil, errors.New("")
+	return nil, errors.New("filetype was empty")
+}
+
+func FileExists(path string) bool {
+	_, err := os.Stat(path)
+	return !os.IsNotExist(err)
+}
+
+func HavePermissions(path string) bool {
+	_, err := os.Stat(path)
+	return !os.IsPermission(err)
 }
 
 func ResolveString(name string, value *string) {

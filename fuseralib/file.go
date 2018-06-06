@@ -258,7 +258,7 @@ func (fh *FileHandle) readFromStream(offset int64, buf []byte) (bytesRead int, e
 			// IsZero. So this is fun.
 			if fh.inode.Link == "" {
 				// we need to get a link no matter what
-				twig.Debugf("seems like we don't have a url for: %s", fh.inode.Name)
+				twig.Debugf("seems like we don't have a url for: %s", *fh.inode.Name)
 				link, expiration, err := newURL(fh.inode)
 				if err != nil {
 					// fh.inode.logFuse("< readFromStream error", 0, err)
@@ -318,20 +318,18 @@ func (fh *FileHandle) readFromStream(offset int64, buf []byte) (bytesRead int, e
 
 func newURL(inode *Inode) (string, time.Time, error) {
 	errfmtstr := "\naccession: %s\nfile: %s\n"
-	payload, err := nr.ResolveNames(inode.fs.opt.ApiEndpoint, 1, false, inode.fs.opt.Loc, inode.fs.opt.Ngc, map[string]bool{inode.Acc: true}, inode.fs.opt.Filetypes)
+	accession, err := nr.SignAccession(inode.fs.opt.APIEndpoint, inode.fs.opt.Loc, inode.Acc, inode.fs.opt.Ngc, inode.fs.opt.Filetypes)
 	if err != nil {
 		return "", time.Now(), errors.Wrapf(err, "issue contacting API while trying to renew signed url for:%s", errfmtstr, inode.Acc, inode.Name)
 	}
 	twig.Debug("resolved a url")
-	for _, p := range payload {
-		for _, f := range p.Files {
-			if f.Name == *inode.Name {
-				twig.Debug("got a new link")
-				if f.Link == "" {
-					return "", time.Now(), errors.Errorf("API did not give new signed url for:%s", errfmtstr, inode.Acc, inode.Name)
-				}
-				return f.Link, f.ExpirationDate, nil
+	for _, f := range accession.Files {
+		if f.Name == *inode.Name {
+			twig.Debug("got a new link")
+			if f.Link == "" {
+				return "", time.Now(), errors.Errorf("API did not give new signed url for:%s", errfmtstr, inode.Acc, inode.Name)
 			}
+			return f.Link, f.ExpirationDate, nil
 		}
 	}
 	twig.Debug("did not get a new link")

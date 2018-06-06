@@ -28,7 +28,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mattrbianchi/twig"
 	"github.com/mitre/fusera/awsutil"
 	"github.com/mitre/fusera/nr"
 	"github.com/pkg/errors"
@@ -46,11 +45,9 @@ type Options struct {
 	Loc         string
 	Filetypes   map[string]bool
 	Eager       bool
-	ApiEndpoint string
+	APIEndpoint string
 	AwsBatch    int
 	GcpBatch    int
-	// SRR# has a map of file names that map to urls where the data is
-	Urls map[string]map[string]string
 
 	// File system
 	MountOptions      map[string]string
@@ -61,12 +58,8 @@ type Options struct {
 	Cache    []string
 	DirMode  os.FileMode
 	FileMode os.FileMode
-	Uid      uint32
-	Gid      uint32
-
-	// Tuning
-	StatCacheTTL time.Duration
-	TypeCacheTTL time.Duration
+	UID      uint32
+	GID      uint32
 
 	// // Debugging
 	Debug bool
@@ -80,7 +73,7 @@ func Mount(ctx context.Context, opt *Options) (*Fusera, *fuse.MountedFileSystem,
 		return nil, nil, err
 	}
 	if fs == nil {
-		return nil, nil, errors.New("Mount: initialization failed")
+		return nil, nil, errors.New("failure to mount: initialization failed")
 	}
 	s := fuseutil.NewFileSystemServer(fs)
 	mntConfig := &fuse.MountConfig{
@@ -89,7 +82,7 @@ func Mount(ctx context.Context, opt *Options) (*Fusera, *fuse.MountedFileSystem,
 	}
 	mfs, err := fuse.Mount(opt.MountPoint, s, mntConfig)
 	if err != nil {
-		return nil, nil, errors.Errorf("Mount: %v", err)
+		return nil, nil, errors.Wrap(err, "failure to mount")
 	}
 	return fs, mfs, nil
 }
@@ -102,10 +95,12 @@ func NewFusera(ctx context.Context, opt *Options) (*Fusera, error) {
 	if strings.HasPrefix(opt.Loc, "gs") {
 		batch = opt.GcpBatch
 	}
-	accessions, err := nr.ResolveNames(opt.ApiEndpoint, batch, !opt.Eager, opt.Loc, opt.Ngc, opt.Acc, opt.Filetypes)
+	accessions, report, err := nr.ResolveNames(opt.APIEndpoint, batch, !opt.Eager, opt.Loc, opt.Ngc, opt.Acc, opt.Filetypes)
 	if err != nil {
-		fmt.Println(err.Error())
-		return nil, err
+		return nil, errors.Wrap(err, "failed to locate accessions")
+	}
+	if report != "" {
+		fmt.Println(report)
 	}
 	fs := &Fusera{
 		accs:  accessions,
@@ -154,7 +149,6 @@ func NewFusera(ctx context.Context, opt *Options) (*Fusera, error) {
 		// dir.addDotAndDotDot()
 		// put some files in the dirs
 		for name, f := range acc.Files {
-			//fmt.Println("making file: ", accessions[i].Files[j].Name)
 			fullFileName := dir.getChildName(name)
 			dir.mu.Lock()
 			file := NewInode(fs, dir, awsutil.String(name), &fullFileName)
@@ -162,7 +156,7 @@ func NewFusera(ctx context.Context, opt *Options) (*Fusera, error) {
 			file.Acc = acc.ID
 			u, err := strconv.ParseUint(f.Size, 10, 64)
 			if err != nil {
-				twig.Debug("%s: %s: failed to set file size to %s, couldn't parse into a uint64", acc.ID, file.Name, f.Size)
+				// twig.Debug("%s: %s: failed to set file size to %s, couldn't parse into a uint64", acc.ID, file.Name, f.Size)
 				u = 0
 			}
 			file.Attributes = InodeAttributes{
@@ -196,9 +190,9 @@ func NewFusera(ctx context.Context, opt *Options) (*Fusera, error) {
 			// 	},
 			// }
 		}
-		twig.Debugf("accession's err content: %s", acc.ErrorLog())
+		// twig.Debugf("accession's err content: %s", acc.ErrorLog())
 		if acc.HasError() {
-			twig.Debugf("accession: %s has an error file", acc.ID)
+			// twig.Debugf("accession: %s has an error file", acc.ID)
 			errlogName := "error.log"
 			fullFileName := dir.getChildName(errlogName)
 			dir.mu.Lock()
@@ -298,7 +292,7 @@ type Fusera struct {
 	forgotCnt uint32
 }
 
-func (fs *Fusera) allocateInodeId() (id fuseops.InodeID) {
+func (fs *Fusera) allocateInodeID() (id fuseops.InodeID) {
 	id = fs.nextInodeID
 	fs.nextInodeID++
 	return
@@ -307,8 +301,8 @@ func (fs *Fusera) allocateInodeId() (id fuseops.InodeID) {
 func (fs *Fusera) SigUsr1() {
 	fs.mu.Lock()
 
-	twig.Infof("forgot %v inodes", fs.forgotCnt)
-	twig.Infof("%v inodes", len(fs.inodes))
+	// twig.Infof("forgot %v inodes", fs.forgotCnt)
+	// twig.Infof("%v inodes", len(fs.inodes))
 	fs.mu.Unlock()
 	debug.FreeOSMemory()
 }
@@ -326,23 +320,23 @@ func (fs *Fusera) getInodeOrDie(id fuseops.InodeID) (inode *Inode) {
 }
 
 func (fs *Fusera) StatFS(ctx context.Context, op *fuseops.StatFSOp) (err error) {
-	var total_space uint64
+	var totalSpace uint64
 	for _, a := range fs.accs {
 		for _, f := range a.Files {
 			s, err := strconv.ParseUint(f.Size, 10, 64)
 			if err != nil {
-				total_space = 1024 * 1024 * 1024
+				totalSpace = 1024 * 1024 * 1024
 				goto skip
 			}
-			total_space += s
+			totalSpace += s
 		}
 	}
 skip:
-	const BLOCK_SIZE = 4096
-	total_blocks := total_space / BLOCK_SIZE
+	const blockSize = 4096
+	totalBlocks := totalSpace / blockSize
 	const INODES = 1 * 1000 * 1000 * 1000 // 1 billion
-	op.BlockSize = BLOCK_SIZE
-	op.Blocks = total_blocks
+	op.BlockSize = blockSize
+	op.Blocks = totalBlocks
 	op.BlocksFree = 0
 	op.BlocksAvailable = 0
 	op.IoSize = 1 * 1024 * 1024 // 1MB
@@ -352,8 +346,6 @@ skip:
 }
 
 func (fs *Fusera) GetInodeAttributes(ctx context.Context, op *fuseops.GetInodeAttributesOp) (err error) {
-	//fmt.Println("sddp.go/GetInodeAttributes called")
-
 	fs.mu.Lock()
 	inode := fs.getInodeOrDie(op.Inode)
 	fs.mu.Unlock()
@@ -361,14 +353,12 @@ func (fs *Fusera) GetInodeAttributes(ctx context.Context, op *fuseops.GetInodeAt
 	attr, err := inode.GetAttributes()
 	if err == nil {
 		op.Attributes = *attr
-		op.AttributesExpiration = time.Now().Add(fs.opt.StatCacheTTL)
 	}
 
 	return
 }
 
 func (fs *Fusera) GetXattr(ctx context.Context, op *fuseops.GetXattrOp) (err error) {
-	//fmt.Println("sddp.go/GetXattr called")
 	fs.mu.Lock()
 	inode := fs.getInodeOrDie(op.Inode)
 	fs.mu.Unlock()
@@ -382,22 +372,18 @@ func (fs *Fusera) GetXattr(ctx context.Context, op *fuseops.GetXattrOp) (err err
 
 	if len(op.Dst) < op.BytesRead {
 		return syscall.ERANGE
-	} else {
-		copy(op.Dst, value)
-		return
 	}
+	copy(op.Dst, value)
+	return
 }
 
 func (fs *Fusera) ListXattr(ctx context.Context, op *fuseops.ListXattrOp) (err error) {
-	//fmt.Println("sddp.go/ListXattr called")
 	fs.mu.Lock()
 	inode := fs.getInodeOrDie(op.Inode)
 	fs.mu.Unlock()
 
 	xattrs, err := inode.ListXattr()
-
 	ncopied := 0
-
 	for _, name := range xattrs {
 		buf := op.Dst[ncopied:]
 		nlen := len(name) + 1
@@ -421,7 +407,6 @@ func (fs *Fusera) ListXattr(ctx context.Context, op *fuseops.ListXattrOp) (err e
 func (fs *Fusera) LookUpInode(ctx context.Context, op *fuseops.LookUpInodeOp) (err error) {
 	var inode *Inode
 	var ok bool
-	// defer func() { log.FuseLog.Debugf("<-- LookUpInode %v %v %v", op.Parent, op.Name, err) }()
 
 	fs.mu.Lock()
 	parent := fs.getInodeOrDie(op.Parent)
@@ -445,8 +430,6 @@ func (fs *Fusera) LookUpInode(ctx context.Context, op *fuseops.LookUpInodeOp) (e
 
 	op.Entry.Child = inode.Id
 	op.Entry.Attributes = inode.InflateAttributes()
-	op.Entry.AttributesExpiration = time.Now().Add(fs.opt.StatCacheTTL)
-	op.Entry.EntryExpiration = time.Now().Add(fs.opt.TypeCacheTTL)
 
 	return
 }
@@ -454,24 +437,18 @@ func (fs *Fusera) LookUpInode(ctx context.Context, op *fuseops.LookUpInodeOp) (e
 // LOCKS_REQUIRED(fs.mu)
 // LOCKS_REQUIRED(parent.mu)
 func (fs *Fusera) insertInode(parent *Inode, inode *Inode) {
-	//fmt.Println("sddp.go/insertInode called")
-	inode.Id = fs.allocateInodeId()
+	inode.Id = fs.allocateInodeID()
 	parent.insertChildUnlocked(inode)
 	fs.inodes[inode.Id] = inode
 }
 
 func (fs *Fusera) OpenDir(ctx context.Context, op *fuseops.OpenDirOp) (err error) {
-	//fmt.Println("sddp.go/OpenDir called with")
-	//fmt.Println("op.Inode: ", op.Inode)
 	fs.mu.Lock()
-
 	handleID := fs.nextHandleID
 	fs.nextHandleID++
-
 	in := fs.getInodeOrDie(op.Inode)
 	fs.mu.Unlock()
 
-	// XXX/is this a dir?
 	dh := in.OpenDir()
 
 	fs.mu.Lock()
@@ -485,7 +462,6 @@ func (fs *Fusera) OpenDir(ctx context.Context, op *fuseops.OpenDirOp) (err error
 
 // LOCKS_EXCLUDED(fs.mu)
 func (fs *Fusera) insertInodeFromDirEntry(parent *Inode, entry *DirHandleEntry) (inode *Inode) {
-	//fmt.Println("sddp.go/insertInodeFromDirEntry called")
 	parent.mu.Lock()
 	defer parent.mu.Unlock()
 
@@ -530,10 +506,6 @@ func (fs *Fusera) insertInodeFromDirEntry(parent *Inode, entry *DirHandleEntry) 
 }
 
 func makeDirEntry(en *DirHandleEntry) fuseutil.Dirent {
-	//fmt.Println("sddp.go/makeDirEntry called with")
-	//fmt.Println("en.Name: ", *en.Name)
-	//fmt.Println("en.Type: ", en.Type)
-	//fmt.Println("en.Offset: ", en.Offset)
 	return fuseutil.Dirent{
 		Name:   *en.Name,
 		Type:   en.Type,
@@ -544,9 +516,6 @@ func makeDirEntry(en *DirHandleEntry) fuseutil.Dirent {
 
 // LOCKS_EXCLUDED(fs.mu)
 func (fs *Fusera) ReadDir(ctx context.Context, op *fuseops.ReadDirOp) (err error) {
-	//fmt.Println("sddp.go/ReadDir called with")
-	//fmt.Println("op.Handle: ", op.Handle)
-
 	// Find the handle.
 	fs.mu.Lock()
 	dh := fs.dirHandles[op.Handle]
@@ -557,7 +526,6 @@ func (fs *Fusera) ReadDir(ctx context.Context, op *fuseops.ReadDirOp) (err error
 	}
 
 	inode := dh.inode
-	// inode.logFuse("ReadDir", op.Offset)
 
 	dh.mu.Lock()
 	defer dh.mu.Unlock()
@@ -589,8 +557,6 @@ func (fs *Fusera) ReadDir(ctx context.Context, op *fuseops.ReadDirOp) (err error
 			break
 		}
 
-		// dh.inode.logFuse("<-- ReadDir", *e.Name, e.Offset)
-
 		op.BytesRead += n
 	}
 
@@ -598,15 +564,11 @@ func (fs *Fusera) ReadDir(ctx context.Context, op *fuseops.ReadDirOp) (err error
 }
 
 func (fs *Fusera) ReleaseDirHandle(ctx context.Context, op *fuseops.ReleaseDirHandleOp) (err error) {
-	//fmt.Println("sddp.go/ReleaseDirHandle called")
-
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
 
 	dh := fs.dirHandles[op.Handle]
 	dh.CloseDir()
-
-	// log.FuseLog.Debugln("ReleaseDirHandle", *dh.inode.FullName())
 
 	delete(fs.dirHandles, op.Handle)
 
@@ -614,7 +576,6 @@ func (fs *Fusera) ReleaseDirHandle(ctx context.Context, op *fuseops.ReleaseDirHa
 }
 
 func (fs *Fusera) OpenFile(ctx context.Context, op *fuseops.OpenFileOp) (err error) {
-	//fmt.Println("sddp.go/OpenFile called")
 	fs.mu.Lock()
 	in := fs.getInodeOrDie(op.Inode)
 	fs.mu.Unlock()
@@ -639,37 +600,26 @@ func (fs *Fusera) OpenFile(ctx context.Context, op *fuseops.OpenFileOp) (err err
 }
 
 func (fs *Fusera) ReadFile(ctx context.Context, op *fuseops.ReadFileOp) (err error) {
-	//fmt.Println("sddp.go/ReadFile called")
-
 	fs.mu.Lock()
 	fh := fs.fileHandles[op.Handle]
 	fs.mu.Unlock()
-
 	op.BytesRead, err = fh.ReadFile(op.Offset, op.Dst)
-
 	return
 }
 
 func (fs *Fusera) SyncFile(ctx context.Context, op *fuseops.SyncFileOp) (err error) {
-
 	// intentionally ignored, so that write()/sync()/write() works
 	// see https://github.com/kahing/goofys/issues/154
 	return
 }
 
 func (fs *Fusera) ReleaseFileHandle(ctx context.Context, op *fuseops.ReleaseFileHandleOp) (err error) {
-	//fmt.Println("sddp.go/ReleaseFileHandle called")
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
 
 	fh := fs.fileHandles[op.Handle]
 	fh.Release()
 
-	// log.FuseLog.Debugln("ReleaseFileHandle", *fh.inode.FullName())
-
 	delete(fs.fileHandles, op.Handle)
-
-	// try to compact heap
-	//fs.bufferPool.MaybeGC()
 	return
 }

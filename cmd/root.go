@@ -1,7 +1,5 @@
-// Copyright 2015 - 2017 Ka-Hing Cheung
-// Copyright 2015 - 2017 Google Inc. All Rights Reserved.
 // Modifications Copyright 2018 The MITRE Corporation
-// Authors: Ka-Hing Cheung, Matthew Bianchi
+// Authors: Matthew Bianchi
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,10 +12,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package cmd
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/mattrbianchi/twig"
@@ -47,9 +45,11 @@ var rootCmd = &cobra.Command{
 	Version: version,
 }
 
+// Execute runs the main command of fusera, which has no action of its own,
+// so it evaluates which subcommand should be executed.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
+		prettyPrintError(err)
 		os.Exit(1)
 	}
 }

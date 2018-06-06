@@ -69,7 +69,6 @@ type Inode struct {
 }
 
 func NewInode(fs *Fusera, parent *Inode, name *string, fullName *string) (inode *Inode) {
-	twig.Debug("handle.go/NewInode called")
 	inode = &Inode{
 		Name:       name,
 		fs:         fs,
@@ -107,8 +106,8 @@ func (inode *Inode) InflateAttributes() (attr fuseops.InodeAttributes) {
 		Mtime:  mtime,
 		Ctime:  mtime,
 		Crtime: mtime,
-		Uid:    inode.fs.opt.Uid,
-		Gid:    inode.fs.opt.Gid,
+		Uid:    inode.fs.opt.UID,
+		Gid:    inode.fs.opt.GID,
 	}
 
 	if inode.dir != nil {
@@ -302,11 +301,8 @@ func (inode *Inode) isDir() bool {
 	return inode.dir != nil
 }
 
-// TODO: remove this code
 // LOCKS_REQUIRED(inode.mu)
 func (inode *Inode) fillXattr() (err error) {
-	twig.Debug("handle.go/fillXattr called")
-
 	return
 }
 
@@ -444,7 +440,6 @@ func (parent *Inode) findChildMaxTime() time.Time {
 }
 
 func (parent *Inode) readDirFromCache(offset fuseops.DirOffset) (en *DirHandleEntry, ok bool) {
-	twig.Debug("handle.go/readDirFromCache called")
 	parent.mu.Lock()
 	defer parent.mu.Unlock()
 
