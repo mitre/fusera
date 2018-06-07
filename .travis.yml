@@ -1,10 +1,10 @@
 language: go
 os: osx
 before_deploy:
-  - cd $HOME/gopath/src/github.com/mitre/fusera/cmd/fusera
+  - cd $HOME/gopath/src/github.com/mitre/fusera
   - go build -o fusera-darwin-amd64
   - env GOOS=linux GOARCH=amd64 go build -o fusera-linux-amd64
-  - cd $HOME/gopath/src/github.com/mitre/fusera/cmd/sracp
+  - cd $HOME/gopath/src/github.com/mitre/fusera/sracp
   - go build -o sracp-darwin-amd64
   - env GOOS=linux GOARCH=amd64 go build -o sracp-linux-amd64
 deploy:
@@ -14,9 +14,9 @@ deploy:
   skip_cleanup: true
   overwrite: true
   file:
-    - $HOME/gopath/src/github.com/mitre/fusera/cmd/fusera/fusera-linux-amd64
-    - $HOME/gopath/src/github.com/mitre/fusera/cmd/fusera/fusera-darwin-amd64
-    - $HOME/gopath/src/github.com/mitre/fusera/cmd/sracp/sracp-linux-amd64
-    - $HOME/gopath/src/github.com/mitre/fusera/cmd/sracp/sracp-darwin-amd64
+    - $HOME/gopath/src/github.com/mitre/fusera/fusera-linux-amd64
+    - $HOME/gopath/src/github.com/mitre/fusera/fusera-darwin-amd64
+    - $HOME/gopath/src/github.com/mitre/fusera/sracp/sracp-linux-amd64
+    - $HOME/gopath/src/github.com/mitre/fusera/sracp/sracp-darwin-amd64
   on:
     tags: true

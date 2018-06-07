@@ -20,85 +20,32 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"mime/multipart"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/mattrbianchi/twig"
 	"github.com/pkg/errors"
 )
 
-func makeBatchRequest(url string, writer *multipart.Writer, body io.Reader) ([]Payload, error) {
-	req, err := http.NewRequest("POST", url, body)
-	if err != nil {
-		return nil, errors.New("can't create request to Name Resolver API")
-	}
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-	twig.Debugf("HTTP REQUEST:\n %+v", req)
-	// implement a retry
-	retried := false
-	var resp *http.Response
-	for {
-		resp, err = http.DefaultClient.Do(req)
-		if err != nil {
-			fmt.Printf("Cannot make request to Name Resolver API at %s\n", url)
-			fmt.Printf("Network error encountered when making request:\n%s\n", err.Error())
-			return nil, err
-		}
-		if resp.StatusCode != http.StatusOK {
-			if !retried {
-				retried = true
-				resp.Body.Close()
-				continue
-			}
-			return nil, errors.Errorf("encountered error from Name Resolver API: %s", resp.Status)
-		}
-		break
-	}
-	ct := resp.Header.Get("Content-Type")
-	if ct != "application/json" {
-		return nil, errors.Errorf("Name Resolver API gave incorrect Content-Type: %s", ct)
-	}
-
-	bytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, errors.New("fatal error when trying to read response from Name Resolver API")
-	}
-	content := string(bytes)
-	twig.Debugf("Response Body from API:\n%s", content)
-	var payload []Payload
-	err = json.Unmarshal(bytes, &payload)
-	if err != nil {
-		var errPayload Payload
-		err = json.Unmarshal(bytes, &errPayload)
-		if err != nil {
-			return nil, errors.Errorf("could not understand response from Name Resolver API: %s\n", content)
-		}
-		return nil, errors.Errorf("encountered error from Name Resolver API: %d: %s\n", errPayload.Status, errPayload.Message)
-	}
-	return payload, nil
-}
-
+// ResolveNames uses the SRA Data Locator API to retrieve files for accessions
 // url: the endpoint for ResolveNames to use, otherwise default will be used.
 // loc: the location to request the files to be in.
 // ngc: the bytes that represent an ngc file, authorizing access to accessions
 // batch: the number of accessions to ask for at once in one request.
 // accs: the accessions to resolve names for.
-func ResolveNames(url, loc string, ngc []byte, batch int, accs map[string]bool) (map[string]*Accession, error) {
+func ResolveNames(url string, batch int, meta bool, loc string, ngc []byte, accs, types map[string]bool) (map[string]*Accession, string, error) {
 	if accs == nil {
-		return nil, errors.New("must provide accessions to pass to Name Resolver API")
+		return nil, "", errors.New("must provide accessions to pass to Name Resolver API")
 	}
 	if loc == "" {
-		return nil, errors.New("must provide a location to pass to Name Resolver API")
+		return nil, "", errors.New("must provide a location to pass to Name Resolver API")
 	}
 	if batch < 1 {
-		return nil, errors.Errorf("must provide a valid batch number, gave: %d", batch)
+		return nil, "", errors.Errorf("must provide a valid batch number, gave: %d", batch)
 	}
 	if url == "" {
 		url = "https://www.ncbi.nlm.nih.gov/Traces/sdl/1/retrieve"
-		twig.Debugf("Name Resolver endpoint was empty, using default: %s", url)
 	}
 	payload := make([]Payload, 0, len(accs))
 	batchCount := 0
@@ -107,35 +54,32 @@ func ResolveNames(url, loc string, ngc []byte, batch int, accs map[string]bool) 
 	var writer *multipart.Writer
 	totalAccs := len(accs)
 	var currentAccsInBatch []string
-	twig.Debugf("total accs: %d", totalAccs)
-	for acc, _ := range accs {
+	var report string
+	for acc := range accs {
 		batchCount++
 		totalCount++
 		if batchCount == 1 {
 			body = &bytes.Buffer{}
 			writer = multipart.NewWriter(body)
-			if err := writeFields(writer, ngc, loc); err != nil {
-				return nil, err
+			if err := writeFields(writer, meta, ngc, loc, types); err != nil {
+				return nil, "", err
 			}
 			currentAccsInBatch = make([]string, 0, batch)
 		}
 		if err := writer.WriteField("acc", acc); err != nil {
-			return nil, errors.Errorf("could not write acc field to multipart.Writer for accession: %s", acc)
+			return nil, "", errors.Errorf("could not write acc field to multipart.Writer for accession: %s", acc)
 		}
 		currentAccsInBatch = append(currentAccsInBatch, acc)
 		if batchCount == batch || batchCount == totalAccs || totalCount == totalAccs {
 			if err := writer.Close(); err != nil {
-				return nil, errors.New("Internal error: could not close multipart.Writer")
+				return nil, "", errors.New("internal error: could not close multipart.Writer")
 			}
 			p, err := makeBatchRequest(url, writer, body)
 			if err != nil {
-				fmt.Println("encountered an issue in one of the batches:")
-				fmt.Println(err.Error())
-				fmt.Printf("Total number of accessions that failed in this batch: %d\n", len(currentAccsInBatch))
-				fmt.Printf("Accessions in batch that failed: %s\n", strings.Join(currentAccsInBatch, "\n"))
-				//TODO: now we have another place where we can have failures but also success...
-				// So we won't append this data to the payload, but need to record this
-				// batch's failure cleanly
+				report += fmt.Sprintln("encountered an issue in one of the batches:")
+				report += fmt.Sprintln(err.Error())
+				report += fmt.Sprintf("Total number of accessions that failed in this batch: %d\n", len(currentAccsInBatch))
+				report += fmt.Sprintf("Accessions in batch that failed: %s\n", strings.Join(currentAccsInBatch, "\n"))
 				batchCount = 0
 				continue
 			}
@@ -143,8 +87,121 @@ func ResolveNames(url, loc string, ngc []byte, batch int, accs map[string]bool) 
 			batchCount = 0
 		}
 	}
-	twig.Debugf("payload: %#+v\n", payload)
-	return sanitize(payload)
+	accessions, err := sanitize(payload)
+	return accessions, report, err
+}
+
+// SignAccession has the SDL API create signed urls for all files under the given accession.
+// url: the endpoint for the SDL API.
+// loc: the location to request the files to be in.
+// accs: the accessions to resolve names for.
+// ngc: the bytes that represent an ngc file, authorizing access to accessions.
+// types: the file types desired.
+func SignAccession(url, loc, acc string, ngc []byte, types map[string]bool) (*Accession, error) {
+	if acc == "" {
+		return nil, errors.New("must provide accession to pass to SDL API")
+	}
+	if loc == "" {
+		return nil, errors.New("must provide a location to pass to SDL API")
+	}
+	if url == "" {
+		url = "https://www.ncbi.nlm.nih.gov/Traces/sdl/1/retrieve"
+	}
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	if err := writer.WriteField("location", loc); err != nil {
+		return nil, errors.New("could not write loc field to multipart.Writer")
+	}
+	if err := writer.WriteField("acc", acc); err != nil {
+		return nil, errors.New("could not write acc field to multipart.Writer")
+	}
+	if ngc != nil {
+		// handle ngc bytes
+		part, err := writer.CreateFormFile("ngc", "ngc")
+		if err != nil {
+			return nil, errors.Wrapf(err, "couldn't create form file for ngc")
+		}
+		_, err = io.Copy(part, bytes.NewReader(ngc))
+		if err != nil {
+			return nil, errors.Errorf("couldn't copy ngc contents: %s into multipart file to make request", ngc)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		return nil, errors.New("could not close multipart.Writer")
+	}
+
+	req, err := http.NewRequest("POST", url, body)
+	if err != nil {
+		return nil, errors.New("can't create request to Name Resolver API")
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, errors.New("can't resolve acc names")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		var errPayload Payload
+		err := json.NewDecoder(resp.Body).Decode(&errPayload)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to decode error message from SDL API after getting HTTP status: %d: %s", resp.StatusCode, resp.Status)
+		}
+		return nil, errors.Errorf("SDL API returned error: %d: %s", errPayload.Status, errPayload.Message)
+	}
+	var payload []Payload
+	err = json.NewDecoder(resp.Body).Decode(&payload)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to decode response from Name Resolver API")
+	}
+
+	accessions, err := sanitize(payload)
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := accessions[acc]; !ok {
+		return nil, errors.New("SDL API did not return requested accession")
+	}
+	return accessions[acc], nil
+}
+
+func makeBatchRequest(url string, writer *multipart.Writer, body io.Reader) ([]Payload, error) {
+	req, err := http.NewRequest("POST", url, body)
+	if err != nil {
+		return nil, errors.New("can't create request to Name Resolver API")
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	// twig.Debugf("HTTP REQUEST:\n %+v", req)
+	// implement a retry
+	retried := false
+	var resp *http.Response
+	for {
+		resp, err = http.DefaultClient.Do(req)
+		if err != nil {
+			return nil, errors.Wrap(err, "network error encountered when making API request")
+		}
+		if resp.StatusCode != http.StatusOK {
+			if !retried {
+				retried = true
+				resp.Body.Close()
+				continue
+			}
+			var errPayload Payload
+			err := json.NewDecoder(resp.Body).Decode(&errPayload)
+			if err != nil {
+				return nil, errors.Wrapf(err, "failed to decode error message from SDL API after getting HTTP status: %d: %s", resp.StatusCode, resp.Status)
+			}
+			return nil, errors.Errorf("SDL API returned error: %d: %s", errPayload.Status, errPayload.Message)
+		}
+		break
+	}
+	defer resp.Body.Close()
+
+	var payload []Payload
+	err = json.NewDecoder(resp.Body).Decode(&payload)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to decode response from Name Resolver API")
+	}
+	return payload, nil
 }
 
 func sanitize(payload []Payload) (map[string]*Accession, error) {
@@ -156,7 +213,6 @@ func sanitize(payload []Payload) (map[string]*Accession, error) {
 			// Something is wrong with the whole accession
 			errmsg = fmt.Sprintf("Some errors were encountered with %s:\n", p.ID)
 			errmsg = errmsg + fmt.Sprintf("%d\t%s\n", p.Status, p.Message)
-			twig.Debug(errmsg)
 			errAcc := &Accession{ID: p.ID, Files: make(map[string]File)}
 			if a, ok := accs[p.ID]; ok {
 				// so we have a duplicate acc...
@@ -179,12 +235,6 @@ func sanitize(payload []Payload) (map[string]*Accession, error) {
 				accs[acc.ID] = acc
 				continue
 			}
-			if f.Link == "" {
-				acc.AppendError(fmt.Sprintf("API returned no link for file: %s\n", f.Name))
-				accs[acc.ID] = acc
-				continue
-			}
-			// TODO: this is where we'll do HEAD calls on the files to check the validity of the URLs
 			acc.Files[f.Name] = f
 		}
 		successfulAccessionExists = true
@@ -192,7 +242,7 @@ func sanitize(payload []Payload) (map[string]*Accession, error) {
 	}
 	var err error
 	if !successfulAccessionExists {
-		err = errors.New("API returned no mountable accessions! Check error logs to resolve.\n")
+		err = errors.New("API returned no accessions")
 	}
 	return accs, err
 }
@@ -233,7 +283,15 @@ type File struct {
 	Service        string    `json:"service,omitempty"`
 }
 
-func writeFields(writer *multipart.Writer, ngc []byte, loc string) error {
+func writeFields(writer *multipart.Writer, meta bool, ngc []byte, loc string, types map[string]bool) error {
+	if err := writer.WriteField("location", loc); err != nil {
+		return errors.New("could not write loc field to multipart.Writer")
+	}
+	if meta {
+		if err := writer.WriteField("meta-only", "yes"); err != nil {
+			return errors.New("could not write meta-only field to multipart.Writer")
+		}
+	}
 	if ngc != nil {
 		// handle ngc bytes
 		part, err := writer.CreateFormFile("ngc", "ngc")
@@ -246,14 +304,15 @@ func writeFields(writer *multipart.Writer, ngc []byte, loc string) error {
 		}
 
 	}
-	if err := writer.WriteField("version", "xc-1.0"); err != nil {
-		return errors.New("could not write version field to multipart.Writer")
-	}
-	if err := writer.WriteField("format", "json"); err != nil {
-		return errors.New("could not write format field to multipart.Writer")
-	}
-	if err := writer.WriteField("location", loc); err != nil {
-		return errors.New("could not write loc field to multipart.Writer")
+	if types != nil {
+		tt := make([]string, 0)
+		for k := range types {
+			tt = append(tt, k)
+		}
+		typesField := strings.Join(tt, ",")
+		if err := writer.WriteField("filetype", typesField); err != nil {
+			return errors.New("could not write filetype field to multipart.Writer")
+		}
 	}
 	return nil
 }
