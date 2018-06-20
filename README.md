@@ -1,20 +1,25 @@
 ![mitrelogo-black](static/mitrelogo-black.jpg)
 
-Fusera
-===
+# Software Tools
 
-Fusera (FUSE for SRA) is a [FUSE](https://en.wikipedia.org/wiki/Filesystem_in_Userspace) implementation for the cloud extension to the [NCBI Sequence Read Archive (SRA)](https://www.ncbi.nlm.nih.gov/sra). SRA accepts data from all kinds of sequencing projects including clinically important studies that involve human subjects or their metagenomes, which may contain human sequences. These data often have a controlled access via [dbGaP (the database of Genotypes and Phenotypes)](https://www.ncbi.nlm.nih.gov/gap/). The SRA provides access to cloud-hosted data through a web-services API (documented here) that provides signedURL access to data objects. Fusera presents selected SRA data elements as a read-only file system, enabling users and tools to access the data through a file system interface. The related sracp tool (reference) provides a convenient interface for copying the data to a mounted file system within a virtual machine. These tools are intended for deployment on linux.
-
-Fundamentally, Fusera presents all of the cloud-hosted SRA data for a set of SRA Accession numbers as a mounted directory, with one subdirectory per SRA Accession number. The user’s credentials are passed through a [dbGaP repository key](https://www.ncbi.nlm.nih.gov/books/NBK63512/), or ngc file, that is obtained from dbGaP. Fusera relies on the SRA’s Nameservice API (reference) which may limit the ability of fusera to ‘see’ certain data sets based on the location where the fusera service is deployed with the aim of limiting charges for data egress.
-
-Installation
+*fusera*
 ---
 
-Note that it is in the works to have both `apt-get` packages and `homebrew` packages to ease the install process.
+*fusera* (FUSE for SRA) is a [FUSE](https://en.wikipedia.org/wiki/Filesystem_in_Userspace) implementation for the cloud extension to the [NCBI Sequence Read Archive (SRA)](https://www.ncbi.nlm.nih.gov/sra). SRA accepts data from all kinds of sequencing projects including  studies that involve human subjects or their metagenomes, which may contain human sequences. Access to this data is controlled via [dbGaP (the database of Genotypes and Phenotypes)](https://www.ncbi.nlm.nih.gov/gap/).  To gain access to data from such a controlled access study, users would submit a Data Access Request (DAR) for their research project.  Users with approved DARs can access the study's phenotype and genotype data via dbGaP, and the sequence data via the SRA.  Traditionally, the SRA was a repository that facilitated download of data to the user's compute environment.  As part of the Sequence Data Delivery Pilot (SDDP), the SRA has been extended to provide access to cloud-hosted data through its [Data Locator web-services API](https://www.ncbi.nlm.nih.gov/Traces/sdl/1/)  using signedURL.  *fusera* presents selected SRA data referenced with an SRA accession number to authorized users as a read-only file system, enabling users and tools to access the data through a file system interface.  
 
-### Dependencies
+*fusera* presents all of the cloud-hosted SRA data for a set of SRA Accession numbers as a mounted directory, with one subdirectory per SRA Accession number. The user’s credentials are passed through a [dbGaP repository key](https://www.ncbi.nlm.nih.gov/books/NBK63512/), or ngc file, that is obtained from dbGaP.  *fusera* automatically detects the cloud region where it is deployed on both AWS and GCP, and requests access to data from the SRA's Data Locator web-servvices API within that same region with the aim of limiting charges for data egress. *fusera* is intended for deployment on AWS or GCP.
 
-#### Fusera
+## *sracp*
+
+Users may want to copy data from its cloud bucket into the local storage of their cloud-hosted virtual machine, instead of operating on the data in-place using *fusera*.  *sracp* addresses this need.   Given a list of SRA accession numbers, a dbGaP repository key, and a target directory, *sracp* copies the data from its cloud bucket into a specified target directory on a cloud-based virtual machine.  The user’s credentials are passed through a [dbGaP repository key](https://www.ncbi.nlm.nih.gov/books/NBK63512/), or ngc file, that is obtained from dbGaP.  *sracp* automatically detects the cloud region where it is deployed on both AWS and GCP, and requests access to data from the SRA's Data Locator web-servvices API within that same region with the aim of limiting charges for data egress. *sracp* is intended for deployment on AWS or GCP.
+
+# Installation
+
+An installer is being developed.
+
+# Dependencies
+
+## *fusera*
 
 Depending on the linux distro, `fuse-utils` may need to be installed.
 
@@ -24,11 +29,11 @@ Mac users must install `osxfuse` either on their [website](https://osxfuse.githu
 $ brew cask install osxfuse
 ```
 
-#### Sracp
+## *sracp*
 
 For now, `sracp` requires an installation of `curl`. This is an "alpha" solution and it's in the roadmap to remove this dependency.
 
-### Pre-built Releases
+# Pre-built Releases
 
 For easy installation, releases of Fusera and Sracp can be found at https://github.com/mitre/fusera/releases
 
@@ -44,9 +49,9 @@ chmod +x fusera
 chmod +x sracp
 ```
 
-It is advised to move this file somewhere in your PATH in order to increase ease of calling either `fusera` or `sracp`.
+It is advisable to move this file somewhere in your PATH.
 
-### Build from source:
+## Build from source
 
 
 ```ShellSession
@@ -57,28 +62,26 @@ $ go install github.com/mitre/fusera/cmd/sracp
 ```
 
 Usage
----
+===
 
-In an effort to keep the instructions as up to date as possible, please refer to the wiki for instructions on how to use `fusera` or `sracp`:  
-https://github.com/mitre/fusera/wiki/Running-Fusera  
-https://github.com/mitre/fusera/wiki/Running-Sracp  
+In an effort to keep the instructions as up to date as possible, please refer to the [wiki](https://github.com/mitre/fusera/wiki/) for instructions on how to use *fusera* and *sracp*.
 
 Troubleshooting
----
+===
 
-https://github.com/mitre/fusera/wiki/Troubleshooting
+See [troubleshooting](https://github.com/mitre/fusera/wiki/Troubleshooting) page on the wiki.
 
 License
----
+===
 
-Fusera started its life as a hard fork of the [Goofys](https://github.com/kahing/goofys) project.
+*fusera* started its life as a hard fork of the [Goofys](https://github.com/kahing/goofys) project.
 
 Copyright (C) 2015 - 2017 Ka-Hing Cheung
 
 Modifications Copyright (C) 2018  The MITRE Corporation
 
-> The modifications were developed for the NIH Cloud Commons Pilot. General questions can be forwarded to:
-> 
+> The modifications were developed for the NIH Data Commons Pilot. General questions can be forwarded to:
+>
 > opensource@mitre.org  
 > Technology Transfer Office  
 > The MITRE Corporation  
@@ -87,7 +90,7 @@ Modifications Copyright (C) 2018  The MITRE Corporation
 
 Licensed under the Apache License, Version 2.0
 
-Only the functionality needed was retained from the Goofys project. Here are a list of files removed from the original source:
+Only the functionality needed was retained from the Goofys project. These files were removed from the original source:
 - api/api.go
 - internal/
 	- perms.go
@@ -100,14 +103,12 @@ Only the functionality needed was retained from the Goofys project. Here are a l
 
 There has also been some refactoring of the codebase, so while some files have been removed, the code in them might exist in other files. License headers and copyright have been kept in these circumstances.
 
-The major changes to the original source stem from Fusera's use case. Instead of only communicating with one bucket, Fusera is redesigned to be capable of accessing many different files distributed over multiple cloud services. One file can be in Google's Cloud Storage while another file that appears to be in the same folder can actually exist on an AWS S3 bucket. This flexibility is partly enabled by Fusera only needing read access to the files and therefore can use either public or signed urls to make HTTP requests directly to the cloud service's API.
+The major changes to the original source stem from *fusera*'s use case.  Goofys was designed to present the content of a single bucket as a file system.  *fusera* is designed to present the data associated with a collection of SRA accessions as a file system, and the data can be spread across many buckets.  Goofys' use of the aws-sdk to interact with AWS compatible endpoints was replaced since *fusera* has no need to authenticate for write access to any of these files.
 
-So Goofys' use of the aws-sdk to interact with AWS compatible endpoints was removed for a more flexible way of communicating since Fusera has no need to authenticate for write access to any of these files.
-
-Also, Goofys' start up was modified in order for Fusera to be able to communicate with an NIH API which provides the urls used to access the desired files.
+Goofys' start up was modified to determine the content of the presented file system based on querying the NCBI Data Locator API, rather than querying the content of the target bucket. 
 
 References
----
+===
 
-Fusera has a lot to owe to the [Goofys](https://github.com/kahing/goofys) project: a high-performance, POSIX-ish file system written in Go. This was used as a starting point.
+*fusera* owes much to the [Goofys](https://github.com/kahing/goofys) project: a high-performance, POSIX-ish file system written in Go which was used as a starting point.
 
