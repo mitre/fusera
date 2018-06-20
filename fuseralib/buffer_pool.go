@@ -39,7 +39,7 @@ type BufferPool struct {
 	pool *sync.Pool
 }
 
-const BUF_SIZE = 5 * 1024 * 1024
+const BufSize = 5 * 1024 * 1024
 
 func maxMemToUse(buffersNow uint64) uint64 {
 	m, err := mem.VirtualMemory()
@@ -55,8 +55,8 @@ func maxMemToUse(buffersNow uint64) uint64 {
 	twig.Debugf("amount of allocated memory: %v %v", ms.Sys/1024/1024, ms.Alloc/1024/1024)
 
 	max := uint64(m.Available+ms.Sys) / 2
-	maxbuffers := MaxUInt64(max/BUF_SIZE, 1)
-	twig.Debugf("using up to %v %vMB buffers, now is %v", maxbuffers, BUF_SIZE/1024/1024, buffersNow)
+	maxbuffers := MaxUInt64(max/BufSize, 1)
+	twig.Debugf("using up to %v %vMB buffers, now is %v", maxbuffers, BufSize/1024/1024, buffersNow)
 	return maxbuffers
 }
 
@@ -73,7 +73,7 @@ func (pool BufferPool) Init() *BufferPool {
 
 	pool.computedMaxbuffers = pool.maxBuffers
 	pool.pool = &sync.Pool{New: func() interface{} {
-		return make([]byte, 0, BUF_SIZE)
+		return make([]byte, 0, BufSize)
 	}}
 
 	return &pool
@@ -81,12 +81,12 @@ func (pool BufferPool) Init() *BufferPool {
 
 // for testing
 func NewBufferPool(maxSizeGlobal uint64) *BufferPool {
-	pool := BufferPool{maxBuffers: maxSizeGlobal / BUF_SIZE}.Init()
+	pool := BufferPool{maxBuffers: maxSizeGlobal / BufSize}.Init()
 	return pool
 }
 
 func (pool *BufferPool) RequestBuffer() (buf []byte) {
-	return pool.RequestMultiple(BUF_SIZE, true)[0]
+	return pool.RequestMultiple(BufSize, true)[0]
 }
 
 func (pool *BufferPool) recomputeBufferLimit() {
@@ -99,7 +99,7 @@ func (pool *BufferPool) recomputeBufferLimit() {
 }
 
 func (pool *BufferPool) RequestMultiple(size uint64, block bool) (buffers [][]byte) {
-	nPages := pages(size, BUF_SIZE)
+	nPages := pages(size, BufSize)
 
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
@@ -118,7 +118,7 @@ func (pool *BufferPool) RequestMultiple(size uint64, block bool) (buffers [][]by
 					// free memory AND correct our limits, yet we still can't allocate.
 					// it's likely that we are simply asking for too much
 					panic(errors.Errorf("Unable to allocate %d bytes, limit is %d bytes",
-						nPages*BUF_SIZE, pool.computedMaxbuffers*BUF_SIZE))
+						nPages*BufSize, pool.computedMaxbuffers*BufSize))
 				}
 			}
 			pool.cond.Wait()
