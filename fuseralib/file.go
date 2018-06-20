@@ -26,7 +26,6 @@ import (
 
 	"github.com/mattrbianchi/twig"
 	"github.com/mitre/fusera/awsutil"
-	"github.com/mitre/fusera/nr"
 	"github.com/pkg/errors"
 
 	"github.com/jacobsa/fuse"
@@ -42,9 +41,9 @@ type FileHandle struct {
 	etags     []*string
 
 	mu              sync.Mutex
-	mpuId           *string
+	mpuID           *string
 	nextWriteOffset int64
-	lastPartId      int
+	lastPartID      int
 
 	poolHandle *BufferPool
 	buf        *MBuf
@@ -62,8 +61,8 @@ type FileHandle struct {
 	numOOORead        uint64 // number of out of order read
 }
 
-const MAX_READAHEAD = uint32(100 * 1024 * 1024)
-const READAHEAD_CHUNK = uint32(20 * 1024 * 1024)
+const MaxReadAhead = uint32(100 * 1024 * 1024)
+const ReadAheadChunk = uint32(20 * 1024 * 1024)
 
 func NewFileHandle(in *Inode) *FileHandle {
 	fh := &FileHandle{inode: in}
@@ -77,26 +76,23 @@ type S3ReadBuffer struct {
 }
 
 func (b *S3ReadBuffer) Read(offset uint64, p []byte) (n int, err error) {
-	if b.offset == offset {
-		n, err = io.ReadFull(b.buf, p)
-		if n != 0 && err == io.ErrUnexpectedEOF {
-			err = nil
-		}
-		if n > 0 {
-			if uint32(n) > b.size {
-				panic(fmt.Sprintf("read more than available %v %v", n, b.size))
-			}
-
-			b.offset += uint64(n)
-			b.size -= uint32(n)
-		}
-
-		return
-	} else {
+	if b.offset != offset {
 		panic(fmt.Sprintf("not the right buffer, expecting %v got %v, %v left", b.offset, offset, b.size))
-		// err = errors.New(fmt.Sprintf("not the right buffer, expecting %v got %v", b.offset, offset))
-		// return
 	}
+
+	n, err = io.ReadFull(b.buf, p)
+	if n != 0 && err == io.ErrUnexpectedEOF {
+		err = nil
+	}
+	if n > 0 {
+		if uint32(n) > b.size {
+			panic(fmt.Sprintf("read more than available %v %v", n, b.size))
+		}
+
+		b.offset += uint64(n)
+		b.size -= uint32(n)
+	}
+	return
 }
 
 func (fh *FileHandle) readFromReadAhead(offset uint64, buf []byte) (bytesRead int, err error) {
@@ -317,23 +313,22 @@ func (fh *FileHandle) readFromStream(offset int64, buf []byte) (bytesRead int, e
 }
 
 func newURL(inode *Inode) (string, time.Time, error) {
-	errfmtstr := "\naccession: %s\nfile: %s\n"
-	accession, err := nr.SignAccession(inode.fs.opt.APIEndpoint, inode.fs.opt.Loc, inode.Acc, inode.fs.opt.Ngc, inode.fs.opt.Filetypes)
+	accession, err := inode.fs.signer.Sign(inode.Acc)
 	if err != nil {
-		return "", time.Now(), errors.Wrapf(err, "issue contacting API while trying to renew signed url for:%s", errfmtstr, inode.Acc, inode.Name)
+		return "", time.Now(), errors.Wrapf(err, "issue contacting API while trying to renew signed url for:\naccession: %s\nfile: %s\n", inode.Acc, inode.Name)
 	}
 	twig.Debug("resolved a url")
 	for _, f := range accession.Files {
 		if f.Name == *inode.Name {
 			twig.Debug("got a new link")
 			if f.Link == "" {
-				return "", time.Now(), errors.Errorf("API did not give new signed url for:%s", errfmtstr, inode.Acc, inode.Name)
+				return "", time.Now(), errors.Errorf("API did not give new signed url for:\naccession: %s\nfile: %s\n", inode.Acc, *inode.Name)
 			}
 			return f.Link, f.ExpirationDate, nil
 		}
 	}
 	twig.Debug("did not get a new link")
-	return "", time.Now(), errors.Errorf("couldn't get new signed url for:%s", errfmtstr, inode.Acc, inode.Name)
+	return "", time.Now(), errors.Errorf("couldn't get new signed url for:\naccession: %s\nfile: %s\n", inode.Acc, *inode.Name)
 }
 
 func (fh *FileHandle) resetToKnownSize() {

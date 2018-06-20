@@ -14,6 +14,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package cmd
 
 import (
@@ -24,10 +25,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mitre/fusera/fuseralib"
+	"github.com/mitre/fusera/sdl"
+
 	"github.com/cavaliercoder/grab"
 	"github.com/mattrbianchi/twig"
 	"github.com/mitre/fusera/flags"
-	"github.com/mitre/fusera/nr"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -99,12 +102,7 @@ var rootCmd = &cobra.Command{
 	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) (err error) {
 		setConfig()
-		twig.Debug("got sracp command")
-		twig.Debug("args:")
-		twig.Debug(args)
 		foldEnvVarsIntoFlagValues()
-		twig.Debug("location: " + location)
-		twig.Debug("accessions: " + accession)
 		var ngc []byte
 		if ngcpath != "" {
 			ngc, err = flags.ResolveNgcFile(ngcpath)
@@ -113,10 +111,10 @@ var rootCmd = &cobra.Command{
 			}
 		}
 		if accession == "" {
-			return errors.New("No accessions provided: sracp needs a list of accessions in order to know what files to copy.")
+			return errors.New("no accessions provided: sracp needs a list of accessions in order to know what files to copy")
 		}
 		// Now resolveAccession's value
-		resolvedAccessions, err := flags.ResolveAccession(accession)
+		accs, err := flags.ResolveAccession(accession)
 		if err != nil {
 			return err
 		}
@@ -126,7 +124,7 @@ var rootCmd = &cobra.Command{
 			location, err = flags.ResolveLocation()
 			if err != nil {
 				twig.Debug(err)
-				return errors.New("No location: A location was not provided so sracp attempted to resolve the location itself. This feature is only supported when sracp is running on Amazon or Google's cloud platforms.")
+				return errors.New("no location: a location was not provided so sracp attempted to resolve the location itself, this feature is only supported when sracp is running on Amazon or Google's cloud platforms")
 			}
 		}
 		var types map[string]bool
@@ -137,23 +135,42 @@ var rootCmd = &cobra.Command{
 			}
 		}
 		path := args[0]
-		accs, report, err := nr.ResolveNames(endpoint, 25, false, location, ngc, resolvedAccessions, types)
-		if err != nil {
-			return err
-		}
-		if report != "" {
-			fmt.Println(report)
-		}
-		for _, v := range accs {
-			err := os.MkdirAll(filepath.Join(path, v.ID), 0755)
+		batch := flags.ResolveBatch(location, awsBatch, gcpBatch)
+		client := sdl.NewClient(endpoint, location, ngc, types)
+		var accessions []*fuseralib.Accession
+		dot := batch
+		i := 0
+		for dot < len(accs) {
+			aa, err := client.GetSignedURL(accs[i:dot])
 			if err != nil {
-				fmt.Printf("Issue creating directory for %s: %s\n", v.ID, err.Error())
+				fmt.Println(err.Error())
+				fmt.Println("List of accessions that failed in this batch:")
+				fmt.Println(accs[i:dot])
+			} else {
+				accessions = append(accessions, aa...)
+			}
+			i = dot
+			dot += batch
+		}
+		aa, err := client.GetSignedURL(accs[i:])
+		if err != nil {
+			fmt.Println(err.Error())
+			fmt.Println("List of accessions that failed in this batch:")
+			fmt.Println(accs[i:])
+		} else {
+			accessions = append(accessions, aa...)
+		}
+
+		for _, a := range accessions {
+			err := os.MkdirAll(filepath.Join(path, a.ID), 0755)
+			if err != nil {
+				fmt.Printf("Issue creating directory for %s: %s\n", a.ID, err.Error())
 				continue
 			}
 			// create a batch of urls to download and collect combined file size to still do disk check.
 			urls := make([]string, 0, len(accs))
 			var totalFileSize uint64
-			for _, f := range v.Files {
+			for _, f := range a.Files {
 				// Defensive programming: if the API returns filetypes the user didn't want, still don't copy them.
 				if types != nil {
 					if _, ok := types[f.Type]; !ok {
@@ -167,7 +184,7 @@ var rootCmd = &cobra.Command{
 				urls = append(urls, f.Link)
 				fileSize, err := strconv.ParseUint(f.Size, 10, 64)
 				if err != nil {
-					fmt.Printf("%s: %s: failed to parse file size in order to check if there's enough disk space to copy it. File size value was %s", v.ID, f.Name, f.Size)
+					fmt.Printf("%s: %s: failed to parse file size in order to check if there's enough disk space to copy it. File size value was %s", a.ID, f.Name, f.Size)
 					continue
 				}
 				totalFileSize += fileSize
@@ -183,12 +200,11 @@ var rootCmd = &cobra.Command{
 			// Available blocks * size per block = available space in bytes
 			availableBytes := stat.Bavail * uint64(stat.Bsize)
 			if availableBytes < totalFileSize {
-				fmt.Printf("DISK FULL: It appears there are only %d available bytes on disk and the batch of files in accession %s is %d bytes.", availableBytes, v.ID, totalFileSize)
+				fmt.Printf("DISK FULL: It appears there are only %d available bytes on disk and the batch of files in accession %s is %d bytes.", availableBytes, a.ID, totalFileSize)
 				continue
 			}
 
-			// TODO: use grab.GetBatch() to batch download all the files for an accession.
-			respch, err := grab.GetBatch(0, filepath.Join(path, v.ID), urls...)
+			respch, err := grab.GetBatch(0, filepath.Join(path, a.ID), urls...)
 			if err != nil {
 				twig.Debugf("%v\n", err)
 			}
@@ -209,24 +225,10 @@ var rootCmd = &cobra.Command{
 					}
 
 				case <-t.C:
-					// clear lines
-					if inProgress > 0 {
-						// fmt.Printf("\033[%dA\033[K", inProgress)
-					}
 
 					// update completed downloads
 					for i, resp := range responses {
 						if resp != nil && resp.IsComplete() {
-							// print final result
-							// if resp.Err() != nil {
-							// 	_, err := fmt.Fprintf(os.Stderr, "Error downloading %s: %v\n", resp.Request.URL(), resp.Err())
-							// 	if err != nil {
-							// 		panic("couldn't print error message for failed download")
-							// 	}
-							// } else {
-							// 	fmt.Printf("Finished %s %d / %d bytes (%d%%)\n", resp.Filename, resp.BytesComplete(), resp.Size, int(100*resp.Progress()))
-							// }
-
 							// mark completed
 							responses[i] = nil
 							completed++
@@ -238,7 +240,6 @@ var rootCmd = &cobra.Command{
 					for _, resp := range responses {
 						if resp != nil && !resp.IsComplete() {
 							inProgress++
-							// fmt.Printf("Downloading %s %d / %d bytes (%d%%)\033[K\n", responses[i].Filename, responses[i].BytesComplete(), responses[i].Size, int(100*responses[i].Progress()))
 						}
 					}
 				}
@@ -246,7 +247,7 @@ var rootCmd = &cobra.Command{
 
 			t.Stop()
 
-			fmt.Printf("accession %s finished: %d file(s) successfully downloaded.\n", v.ID, len(urls))
+			fmt.Printf("accession %s finished: %d file(s) successfully downloaded.\n", a.ID, len(urls))
 		}
 		return nil
 	},

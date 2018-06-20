@@ -25,49 +25,43 @@ import (
 func MaxInt(a, b int) int {
 	if a > b {
 		return a
-	} else {
-		return b
 	}
+	return b
 }
 
 func MinInt(a, b int) int {
 	if a < b {
 		return a
-	} else {
-		return b
 	}
+	return b
 }
 
 func MaxUInt32(a, b uint32) uint32 {
 	if a > b {
 		return a
-	} else {
-		return b
 	}
+	return b
 }
 
 func MinUInt32(a, b uint32) uint32 {
 	if a < b {
 		return a
-	} else {
-		return b
 	}
+	return b
 }
 
 func MaxUInt64(a, b uint64) uint64 {
 	if a > b {
 		return a
-	} else {
-		return b
 	}
+	return b
 }
 
 func MinUInt64(a, b uint64) uint64 {
 	if a < b {
 		return a
-	} else {
-		return b
 	}
+	return b
 }
 
 func xattrEscape(value []byte) (s string) {

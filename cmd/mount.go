@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"os/user"
@@ -28,6 +29,7 @@ import (
 	"github.com/mattrbianchi/twig"
 	"github.com/mitre/fusera/flags"
 	"github.com/mitre/fusera/fuseralib"
+	"github.com/mitre/fusera/sdl"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -140,22 +142,45 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 			return errors.New("no location provided")
 		}
 	}
+
 	uid, gid := myUserAndGroup()
+	batch := flags.ResolveBatch(location, awsBatch, gcpBatch)
+
+	client := sdl.NewClient(endpoint, location, ngc, types)
+	var accessions []*fuseralib.Accession
+	if !eager {
+		accessions, err = client.GetMetadata(accs)
+	} else {
+		dot := batch
+		i := 0
+		for dot < len(accs) {
+			aa, err := client.GetSignedURL(accs[i:dot])
+			if err != nil {
+				fmt.Println(err.Error())
+				fmt.Println("List of accessions that failed in this batch:")
+				fmt.Println(accs[i:dot])
+			} else {
+				accessions = append(accessions, aa...)
+			}
+			i = dot
+			dot += batch
+		}
+		aa, err := client.GetSignedURL(accs[i:])
+		if err != nil {
+			fmt.Println(err.Error())
+			fmt.Println("List of accessions that failed in this batch:")
+			fmt.Println(accs[i:])
+		} else {
+			accessions = append(accessions, aa...)
+		}
+	}
+	//
 	opt := &fuseralib.Options{
-		Acc:       accs,
-		Loc:       location,
-		Ngc:       ngc,
-		Filetypes: types,
-		Eager:     eager,
+		Signer: client,
+		Acc:    accessions,
 
-		APIEndpoint: endpoint,
-		AwsBatch:    awsBatch,
-		GcpBatch:    gcpBatch,
-
-		DirMode:  0555,
-		FileMode: 0444,
-		UID:      uint32(uid),
-		GID:      uint32(gid),
+		UID: uint32(uid),
+		GID: uint32(gid),
 		// TODO: won't need.
 		MountOptions:  make(map[string]string),
 		MountPoint:    mountpoint,

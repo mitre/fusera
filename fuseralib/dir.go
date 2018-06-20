@@ -92,7 +92,7 @@ func (inode *Inode) OpenDir() (dh *DirHandle) {
 			if parent.dir.seqOpenDirScore < 255 {
 				parent.dir.seqOpenDirScore++
 			}
-			parent.dir.lastOpenDirIdx += 1
+			parent.dir.lastOpenDirIdx++
 			if parent.dir.seqOpenDirScore == 2 {
 				//TODO: change to other log
 				twig.Debugf("%v in readdir mode", *parent.FullName())

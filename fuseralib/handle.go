@@ -39,7 +39,7 @@ type InodeAttributes struct {
 }
 
 type Inode struct {
-	Id          fuseops.InodeID
+	ID          fuseops.InodeID
 	Name        *string
 	Link        string
 	Acc         string
@@ -84,10 +84,9 @@ func NewInode(fs *Fusera, parent *Inode, name *string, fullName *string) (inode 
 func (inode *Inode) FullName() *string {
 	if inode.Parent == nil {
 		return inode.Name
-	} else {
-		s := inode.Parent.getChildName(*inode.Name)
-		return &s
 	}
+	s := inode.Parent.getChildName(*inode.Name)
+	return &s
 }
 
 func (inode *Inode) touch() {
@@ -112,10 +111,10 @@ func (inode *Inode) InflateAttributes() (attr fuseops.InodeAttributes) {
 
 	if inode.dir != nil {
 		attr.Nlink = 2
-		attr.Mode = inode.fs.opt.DirMode | os.ModeDir
+		attr.Mode = inode.fs.DirMode | os.ModeDir
 	} else {
 		attr.Nlink = 1
-		attr.Mode = inode.fs.opt.FileMode
+		attr.Mode = inode.fs.FileMode
 	}
 	return
 }
@@ -255,11 +254,10 @@ func (parent *Inode) insertChildUnlocked(inode *Inode) {
 }
 
 func (parent *Inode) getChildName(name string) string {
-	if parent.Id == fuseops.RootInodeID {
+	if parent.ID == fuseops.RootInodeID {
 		return name
-	} else {
-		return fmt.Sprintf("%v/%v", *parent.FullName(), name)
 	}
+	return fmt.Sprintf("%v/%v", *parent.FullName(), name)
 }
 
 // LOCKS_REQUIRED(fs.mu)
@@ -307,8 +305,7 @@ func (inode *Inode) fillXattr() (err error) {
 }
 
 // LOCKS_REQUIRED(inode.mu)
-func (inode *Inode) getXattrMap(name string, userOnly bool) (
-	meta map[string][]byte, newName string, err error) {
+func (inode *Inode) getXattrMap(name string, userOnly bool) (meta map[string][]byte, newName string, err error) {
 
 	if strings.HasPrefix(name, "s3.") {
 		if userOnly {
@@ -328,9 +325,8 @@ func (inode *Inode) getXattrMap(name string, userOnly bool) (
 	} else {
 		if userOnly {
 			return nil, "", syscall.EACCES
-		} else {
-			return nil, "", syscall.ENODATA
 		}
+		return nil, "", syscall.ENODATA
 	}
 
 	if meta == nil {
@@ -354,9 +350,8 @@ func (inode *Inode) GetXattr(name string) ([]byte, error) {
 	value, ok := meta[name]
 	if ok {
 		return []byte(value), nil
-	} else {
-		return nil, syscall.ENODATA
 	}
+	return nil, syscall.ENODATA
 }
 
 func (inode *Inode) ListXattr() ([]string, error) {
@@ -372,11 +367,11 @@ func (inode *Inode) ListXattr() ([]string, error) {
 		return nil, err
 	}
 
-	for k, _ := range inode.s3Metadata {
+	for k := range inode.s3Metadata {
 		xattrs = append(xattrs, "s3."+k)
 	}
 
-	for k, _ := range inode.userMetadata {
+	for k := range inode.userMetadata {
 		xattrs = append(xattrs, "user."+k)
 	}
 
@@ -390,7 +385,7 @@ func (inode *Inode) OpenFile() (fh *FileHandle, err error) {
 	defer inode.mu.Unlock()
 
 	fh = NewFileHandle(inode)
-	inode.fileHandles += 1
+	inode.fileHandles++
 	return
 }
 
@@ -452,7 +447,7 @@ func (parent *Inode) readDirFromCache(offset fuseops.DirOffset) (en *DirHandleEn
 
 	en = &DirHandleEntry{
 		Name:       child.Name,
-		Inode:      child.Id,
+		Inode:      child.ID,
 		Offset:     offset + 1,
 		Attributes: &child.Attributes,
 	}

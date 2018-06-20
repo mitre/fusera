@@ -23,13 +23,11 @@ import (
 	"os"
 	"runtime/debug"
 	"strconv"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/mitre/fusera/awsutil"
-	"github.com/mitre/fusera/nr"
 	"github.com/pkg/errors"
 
 	"github.com/jacobsa/fuse"
@@ -40,14 +38,8 @@ import (
 // Options is a collection of values that describe how Fusera should behave.
 type Options struct {
 	// The file used to authenticate with the SRA Data Locator API
-	Ngc         []byte
-	Acc         map[string]bool
-	Loc         string
-	Filetypes   map[string]bool
-	Eager       bool
-	APIEndpoint string
-	AwsBatch    int
-	GcpBatch    int
+	Signer Signer
+	Acc    []*Accession
 
 	// File system
 	MountOptions      map[string]string
@@ -55,11 +47,9 @@ type Options struct {
 	MountPointArg     string
 	MountPointCreated string
 
-	Cache    []string
-	DirMode  os.FileMode
-	FileMode os.FileMode
-	UID      uint32
-	GID      uint32
+	Cache []string
+	UID   uint32
+	GID   uint32
 
 	// // Debugging
 	Debug bool
@@ -88,24 +78,14 @@ func Mount(ctx context.Context, opt *Options) (*Fusera, *fuse.MountedFileSystem,
 }
 
 func NewFusera(ctx context.Context, opt *Options) (*Fusera, error) {
-	batch := 10
-	if strings.HasPrefix(opt.Loc, "s3") {
-		batch = opt.AwsBatch
-	}
-	if strings.HasPrefix(opt.Loc, "gs") {
-		batch = opt.GcpBatch
-	}
-	accessions, report, err := nr.ResolveNames(opt.APIEndpoint, batch, !opt.Eager, opt.Loc, opt.Ngc, opt.Acc, opt.Filetypes)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to locate accessions")
-	}
-	if report != "" {
-		fmt.Println(report)
-	}
 	fs := &Fusera{
-		accs:  accessions,
-		opt:   opt,
-		umask: 0122,
+		signer: opt.Signer,
+		accs:   opt.Acc,
+		// TODO: I don't think Fusera needs opt anymore.
+		opt:      opt,
+		DirMode:  0555,
+		FileMode: 0444,
+		umask:    0122,
 	}
 
 	now := time.Now()
@@ -119,7 +99,7 @@ func NewFusera(ctx context.Context, opt *Options) (*Fusera, error) {
 	fs.nextInodeID = fuseops.RootInodeID + 1
 	fs.inodes = make(map[fuseops.InodeID]*Inode)
 	root := NewInode(fs, nil, awsutil.String(""), awsutil.String(""))
-	root.Id = fuseops.RootInodeID
+	root.ID = fuseops.RootInodeID
 	root.ToDir()
 	root.Attributes.Mtime = fs.rootAttrs.Mtime
 
@@ -132,13 +112,13 @@ func NewFusera(ctx context.Context, opt *Options) (*Fusera, error) {
 
 	http.DefaultTransport.(*http.Transport).MaxIdleConnsPerHost = 1000
 
-	for id, acc := range accessions {
+	for _, acc := range fs.accs {
 		// make directories here
 		// dir
 		//fmt.Println("making dir: ", accessions[i].ID)
-		fullDirName := root.getChildName(id)
+		fullDirName := root.getChildName(acc.ID)
 		root.mu.Lock()
-		dir := NewInode(fs, root, awsutil.String(id), &fullDirName)
+		dir := NewInode(fs, root, awsutil.String(acc.ID), &fullDirName)
 		dir.ToDir()
 		dir.touch()
 		root.mu.Unlock()
@@ -249,14 +229,14 @@ type Fusera struct {
 	fuseutil.NotImplementedFileSystem
 
 	// Fusera specific info
-	accs map[string]*nr.Accession
+	accs   []*Accession
+	opt    *Options
+	signer Signer
+	umask  uint32
 
-	opt *Options
-
-	umask uint32
-
-	rootAttrs InodeAttributes
-
+	DirMode    os.FileMode
+	FileMode   os.FileMode
+	rootAttrs  InodeAttributes
 	bufferPool *BufferPool
 
 	// A lock protecting the state of the file system struct itself (distinct
@@ -279,17 +259,11 @@ type Fusera struct {
 	// INVARIANT: For all v, if IsDirName(v.Name()) then v is inode.DirInode
 	//
 	// GUARDED_BY(mu)
-	inodes map[fuseops.InodeID]*Inode
-
+	inodes       map[fuseops.InodeID]*Inode
 	nextHandleID fuseops.HandleID
 	dirHandles   map[fuseops.HandleID]*DirHandle
-
-	fileHandles map[fuseops.HandleID]*FileHandle
-
-	// replicators *Ticket
-	// restorers   *Ticket
-
-	forgotCnt uint32
+	fileHandles  map[fuseops.HandleID]*FileHandle
+	forgotCnt    uint32
 }
 
 func (fs *Fusera) allocateInodeID() (id fuseops.InodeID) {
@@ -428,7 +402,7 @@ func (fs *Fusera) LookUpInode(ctx context.Context, op *fuseops.LookUpInodeOp) (e
 		return fuse.ENOENT
 	}
 
-	op.Entry.Child = inode.Id
+	op.Entry.Child = inode.ID
 	op.Entry.Attributes = inode.InflateAttributes()
 
 	return
@@ -437,9 +411,9 @@ func (fs *Fusera) LookUpInode(ctx context.Context, op *fuseops.LookUpInodeOp) (e
 // LOCKS_REQUIRED(fs.mu)
 // LOCKS_REQUIRED(parent.mu)
 func (fs *Fusera) insertInode(parent *Inode, inode *Inode) {
-	inode.Id = fs.allocateInodeID()
+	inode.ID = fs.allocateInodeID()
 	parent.insertChildUnlocked(inode)
-	fs.inodes[inode.Id] = inode
+	fs.inodes[inode.ID] = inode
 }
 
 func (fs *Fusera) OpenDir(ctx context.Context, op *fuseops.OpenDirOp) (err error) {

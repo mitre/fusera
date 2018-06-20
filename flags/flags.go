@@ -43,24 +43,25 @@ func ResolveLocation() (string, error) {
 // If a list of comma separated accessions was provided, use it.
 // Otherwise, if a path to a cart file was given, deduce whether it's on s3 or local.
 // Either way, attempt to read the file and make a map of unique accessions.
-func ResolveAccession(acc string) (map[string]bool, error) {
+func ResolveAccession(acc string) ([]string, error) {
 	var accessions = make(map[string]bool)
 	if strings.HasPrefix(acc, "http") {
 		// we were given a url on s3.
 		data, err := awsutil.ReadFile(acc)
 		if err != nil {
-			return nil, errors.Wrapf(err, "couldn't open cart file at: %s", acc)
+			return nil, errors.Wrapf(err, "couldn't open accession list file at: %s", acc)
 		}
 		acc = string(data)
-	} else if FileExists(acc) {
+	}
+	if NoFileErrors(acc) {
 		data, err := ioutil.ReadFile(acc)
 		if err != nil {
-			return nil, errors.Wrapf(err, "couldn't open cart file at: %s", acc)
+			return nil, errors.Wrapf(err, "couldn't open accession list file at: %s", acc)
 		}
 		acc = string(data)
 	}
 	// Now process acc
-	aa := strings.FieldsFunc(acc, ParseAccessions)
+	aa := strings.FieldsFunc(acc, parseAccessions)
 	var empty = true
 	for _, a := range aa {
 		if a != "" {
@@ -69,14 +70,18 @@ func ResolveAccession(acc string) (map[string]bool, error) {
 		}
 	}
 	if empty {
-		return nil, errors.New("cart file was empty")
+		return nil, errors.New("the input given for accessions resulted in no readable form")
 	}
 
-	return accessions, nil
+	list := make([]string, 0, len(accessions))
+	for k := range accessions {
+		list = append(list, k)
+	}
+
+	return list, nil
 }
 
-// TODO: should be a private function
-func ParseAccessions(r rune) bool {
+func parseAccessions(r rune) bool {
 	return r == '\n' || r == '\t' || r == ',' || r == ' '
 }
 
@@ -115,6 +120,11 @@ func ResolveFileType(filetype string) (map[string]bool, error) {
 	return nil, errors.New("filetype was empty")
 }
 
+func NoFileErrors(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
 func FileExists(path string) bool {
 	_, err := os.Stat(path)
 	return !os.IsNotExist(err)
@@ -123,6 +133,24 @@ func FileExists(path string) bool {
 func HavePermissions(path string) bool {
 	_, err := os.Stat(path)
 	return !os.IsPermission(err)
+}
+
+func IsAWS(location string) bool {
+	return strings.HasPrefix(location, "s3")
+}
+
+func IsGCP(location string) bool {
+	return strings.HasPrefix(location, "gs")
+}
+
+func ResolveBatch(location string, aws, gcp int) int {
+	if IsAWS(location) {
+		return aws
+	}
+	if IsGCP(location) {
+		return gcp
+	}
+	return 10
 }
 
 func ResolveString(name string, value *string) {
