@@ -1,11 +1,7 @@
-FROM golang:1.10
+FROM golang:alpine
 
-WORKDIR /go/src/github.com/mitre/fusera
-COPY . .
+RUN apk --update add fuse fuse-dev git
+RUN go get github.com/mitre/fusera/...
 
-RUN apt-get update && apt-get install -y fuse
+RUN cd ~ && mkdir studies
 
-RUN go get -d -v ./...
-RUN go install -v ./...
-
-ENTRYPOINT ["fusera"]
