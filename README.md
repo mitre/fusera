@@ -29,10 +29,6 @@ Mac users must install `osxfuse` either on their [website](https://osxfuse.githu
 $ brew cask install osxfuse
 ```
 
-## *sracp*
-
-For now, `sracp` requires an installation of `curl`. This is an "alpha" solution and it's in the roadmap to remove this dependency.
-
 # Pre-built Releases
 
 For easy installation, releases of Fusera and Sracp can be found at https://github.com/mitre/fusera/releases
