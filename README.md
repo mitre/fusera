@@ -15,7 +15,7 @@ Users may want to copy data from its cloud bucket into the local storage of thei
 
 # Installation
 
-An installer is being developed.
+See installation instructions on the [wiki](https://github.com/mitre/fusera/wiki/Installing-Fusera).
 
 # Dependencies
 
