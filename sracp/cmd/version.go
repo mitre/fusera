@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/mitre/fusera/flags"
 	"github.com/spf13/cobra"
 )
 
@@ -12,13 +13,13 @@ var (
 
 func init() {
 	rootCmd.AddCommand(versionCmd)
-	version = "v0.0.8"
+	version = "v0.0.9"
 }
 
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the version number of sracp",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Printf("sracp -- %s\n", version)
+		fmt.Printf("sracp -- %s\n", flags.Version)
 	},
 }
