@@ -1,9 +1,10 @@
 language: go
 before_deploy:
   - cd $HOME/gopath/src/github.com/mitre/fusera
-  - go build -o fusera
+  - export TAG=$(git describe --tags --abbrev=0)
+  - go build -ldflags "-X github.com/mitre/fusera/flags.Version=$TAG" -o fusera
   - cd $HOME/gopath/src/github.com/mitre/fusera/sracp
-  - go build -o sracp
+  - go build -ldflags "-X github.com/mitre/fusera/flags.Version=$TAG" -o sracp
 deploy:
   provider: releases
   api_key:
