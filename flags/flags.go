@@ -12,7 +12,8 @@ import (
 
 var (
 	EnvPrefix = "dbgap"
-	Version   = "0.0.9"
+	// Version should be set at compile time to `git describe --tags --abbrev=0`
+	Version string
 
 	LocationName  = "location"
 	AccessionName = "accession"
