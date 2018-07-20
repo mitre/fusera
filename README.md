@@ -29,34 +29,6 @@ Mac users must install `osxfuse` either on their [website](https://osxfuse.githu
 $ brew cask install osxfuse
 ```
 
-# Pre-built Releases
-
-For easy installation, releases of Fusera and Sracp can be found at https://github.com/mitre/fusera/releases
-
-For linux: `fusera-linux-amd64` and `sracp-linux-amd64`
-
-For mac: `fusera-darwin-amd64` and `sracp-darwin-amd64`
-
-After downloading, it's advised to rename the files to `fusera` and `sracp` to fit with the rest of this document.
-
-Make sure to grab the latest release, which is signified on the left sidebar with a green badge. Also note that changing the binary to be executable will probably be necessary:
-```ShellSession
-chmod +x fusera
-chmod +x sracp
-```
-
-It is advisable to move this file somewhere in your PATH.
-
-## Build from source
-
-
-```ShellSession
-$ go get github.com/mitre/fusera/cmd/fusera
-$ go install github.com/mitre/fusera/cmd/fusera
-$ go get github.com/mitre/fusera/cmd/sracp
-$ go install github.com/mitre/fusera/cmd/sracp
-```
-
 Usage
 ===
 
