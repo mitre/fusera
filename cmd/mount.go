@@ -149,7 +149,28 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 	client := sdl.NewClient(endpoint, location, ngc, types)
 	var accessions []*fuseralib.Accession
 	if !eager {
-		accessions, err = client.GetMetadata(accs)
+		dot := 2000
+		i := 0
+		for dot < len(accs) {
+			aa, err := client.GetMetadata(accs[i:dot])
+			if err != nil {
+				fmt.Println(err.Error())
+				fmt.Println("List of accessions that failed in this batch:")
+				fmt.Println(accs[i:dot])
+			} else {
+				accessions = append(accessions, aa...)
+			}
+			i = dot
+			dot += batch
+		}
+		aa, err := client.GetMetadata(accs[i:])
+		if err != nil {
+			fmt.Println(err.Error())
+			fmt.Println("List of accessions that failed in this batch:")
+			fmt.Println(accs[i:])
+		} else {
+			accessions = append(accessions, aa...)
+		}
 	} else {
 		dot := batch
 		i := 0
