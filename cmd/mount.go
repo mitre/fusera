@@ -155,10 +155,10 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 		for dot < len(accs) {
 			aa, err := client.GetMetadata(accs[i:dot])
 			if err != nil {
-				rootErr = append(rootErr, []byte(err.Error())...)
+				rootErr = append(rootErr, []byte(fmt.Sprintln(err.Error()))...)
 				rootErr = append(rootErr, []byte("List of accessions that failed in this batch:\n")...)
 				rootErr = append(rootErr, []byte(fmt.Sprintln(accs[i:dot]))...)
-				fmt.Println(rootErr)
+				fmt.Println(string(rootErr))
 			} else {
 				accessions = append(accessions, aa...)
 			}
@@ -167,10 +167,10 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 		}
 		aa, err := client.GetMetadata(accs[i:])
 		if err != nil {
-			rootErr = append(rootErr, []byte(err.Error())...)
+			rootErr = append(rootErr, []byte(fmt.Sprintln(err.Error()))...)
 			rootErr = append(rootErr, []byte("List of accessions that failed in this batch:\n")...)
 			rootErr = append(rootErr, []byte(fmt.Sprintln(accs[i:]))...)
-			fmt.Println(rootErr)
+			fmt.Println(string(rootErr))
 		} else {
 			accessions = append(accessions, aa...)
 		}
@@ -180,10 +180,10 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 		for dot < len(accs) {
 			aa, err := client.GetSignedURL(accs[i:dot])
 			if err != nil {
-				rootErr = append(rootErr, []byte(err.Error())...)
+				rootErr = append(rootErr, []byte(fmt.Sprintln(err.Error()))...)
 				rootErr = append(rootErr, []byte("List of accessions that failed in this batch:\n")...)
 				rootErr = append(rootErr, []byte(fmt.Sprintln(accs[i:dot]))...)
-				fmt.Println(rootErr)
+				fmt.Println(string(rootErr))
 			} else {
 				accessions = append(accessions, aa...)
 			}
@@ -192,13 +192,17 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 		}
 		aa, err := client.GetSignedURL(accs[i:])
 		if err != nil {
-			rootErr = append(rootErr, []byte(err.Error())...)
+			rootErr = append(rootErr, []byte(fmt.Sprintln(err.Error()))...)
 			rootErr = append(rootErr, []byte("List of accessions that failed in this batch:\n")...)
 			rootErr = append(rootErr, []byte(fmt.Sprintln(accs[i:]))...)
-			fmt.Println(rootErr)
+			fmt.Println(string(rootErr))
 		} else {
 			accessions = append(accessions, aa...)
 		}
+	}
+	if len(accessions) == 0 {
+		fmt.Println("It seems like none of the accessions were successful, fusera is shutting down.")
+		os.Exit(1)
 	}
 	//
 	opt := &fuseralib.Options{
