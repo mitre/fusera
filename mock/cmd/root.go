@@ -71,26 +71,32 @@ type file struct {
 	Md5Hash        string    `json:"md5,omitempty"`
 	Link           string    `json:"link,omitempty"`
 	ExpirationDate time.Time `json:"expirationDate,omitempty"`
+	Bucket         string    `json:"bucket,omitempty"`
+	Key            string    `json:"key,omitempty"`
 	Service        string    `json:"service,omitempty"`
 }
 
 // HomeHandler returns whatever JSON I want.
 func HomeHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	response := make([]payload, 5045, 5045)
+	response := make([]payload, 1, 1)
 	for i := range response {
 		response[i].ID = "a" + fmt.Sprintf("%d", i)
 		response[i].Status = 200
-		response[i].Files = make([]file, 3, 3)
+		response[i].Files = make([]file, 1, 1)
 		for j := range response[i].Files {
-			response[i].Files[j].Name = "a" + fmt.Sprintf("%d", i) + "file" + fmt.Sprintf("%d", j)
-			response[i].Files[j].ExpirationDate = time.Now().Add(time.Hour)
+			response[i].Files[j].Name = "test.txt"
+			response[i].Files[j].Bucket = "matt-first-test-bucket"
+			response[i].Files[j].Key = "test.txt"
+			response[i].Files[j].Size = "51"
+			//response[i].Files[j].ExpirationDate = time.Now().Add(time.Hour)
 		}
 	}
+	js, _ := json.Marshal(&response)
 	if err := json.NewEncoder(w).Encode(&response); err != nil {
 		panic("couldn't encode json")
 	}
-	fmt.Println(response)
+	fmt.Println(string(js))
 }
 
 // Execute runs the root command of mocksdlapi.

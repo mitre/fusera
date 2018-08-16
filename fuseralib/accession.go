@@ -28,5 +28,7 @@ type File struct {
 	Md5Hash        string    `json:"md5,omitempty"`
 	Link           string    `json:"link,omitempty"`
 	ExpirationDate time.Time `json:"expirationDate,omitempty"`
+	Bucket         string    `json:"bucket,omitempty"`
+	Key            string    `json:"key,omitempty"`
 	Service        string    `json:"service,omitempty"`
 }
