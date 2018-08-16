@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"mime/multipart"
 	"net/http"
 	"strings"
@@ -101,7 +102,8 @@ func (c *Client) makeRequest(accessions []string, meta bool) ([]*fuseralib.Acces
 		var errPayload Payload
 		err := json.NewDecoder(resp.Body).Decode(&errPayload)
 		if err != nil {
-			return nil, errors.Wrapf(err, "failed to decode error message from SDL API after getting HTTP status: %d: %s", resp.StatusCode, resp.Status)
+			response, _ := ioutil.ReadAll(resp.Body)
+			return nil, errors.Errorf("failed to decode error message from SDL API after getting HTTP status: %d: %s\nResponse:%v\n", resp.StatusCode, resp.Status, string(response))
 		}
 		return nil, errors.Errorf("SDL API returned error: %d: %s", errPayload.Status, errPayload.Message)
 	}
