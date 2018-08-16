@@ -88,6 +88,39 @@ func GetObjectRange(url, byteRange string) (*http.Response, error) {
 	return resp, nil
 }
 
+type Client struct {
+	Bucket string
+	Key    string
+	Region string
+}
+
+func NewClient(bucket, key, region string) Client {
+	return Client{
+		Bucket: bucket,
+		Key:    key,
+		Region: region,
+	}
+}
+
+func (c Client) GetObjectRange(byteRange string) (io.ReadCloser, error) {
+	cfg := (&aws.Config{
+		Region: aws.String(c.Region),
+	}).WithHTTPClient(newHTTPClient())
+	sess := session.New(cfg)
+	svc := s3.New(sess)
+	input := &s3.GetObjectInput{
+		Bucket: aws.String(c.Bucket),
+		Key:    aws.String(c.Key),
+		Range:  aws.String(byteRange),
+	}
+	obj, err := svc.GetObject(input)
+	if err != nil {
+		twig.Debug("error from GetObject")
+		return nil, err
+	}
+	return obj.Body, err
+}
+
 // Expects the url to point to a valid ngc file.
 // Uses the aws-sdk to read the file, assuming that
 // this file will not be publicly accessible and will
@@ -114,21 +147,7 @@ func ReadFile(path string) ([]byte, error) {
 	twig.Debugf("file: %s", file)
 	cfg := (&aws.Config{
 		Region: &region,
-	}).WithHTTPClient(&http.Client{
-		Transport: &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
-			DialContext: (&net.Dialer{
-				Timeout:   15 * time.Second,
-				KeepAlive: 15 * time.Second,
-				DualStack: true,
-			}).DialContext,
-			MaxIdleConns:          1000,
-			MaxIdleConnsPerHost:   1000,
-			IdleConnTimeout:       20 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ExpectContinueTimeout: 10 * time.Second,
-		},
-	})
+	}).WithHTTPClient(newHTTPClient())
 	sess := session.New(cfg)
 	svc := s3.New(sess)
 	input := &s3.GetObjectInput{
@@ -234,6 +253,24 @@ func resolveGcpZone() (string, error) {
 		return "", errors.New("issue trying to resolve region, google returned empty region")
 	}
 	return "gs." + path, nil
+}
+
+func newHTTPClient() *http.Client {
+	return &http.Client{
+		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   15 * time.Second,
+				KeepAlive: 15 * time.Second,
+				DualStack: true,
+			}).DialContext,
+			MaxIdleConns:          1000,
+			MaxIdleConnsPerHost:   1000,
+			IdleConnTimeout:       20 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 10 * time.Second,
+		},
+	}
 }
 
 func parseHTTPError(code int) error {

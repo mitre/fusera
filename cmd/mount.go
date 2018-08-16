@@ -208,6 +208,7 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 	opt := &fuseralib.Options{
 		Signer: client,
 		Acc:    accessions,
+		Region: location,
 
 		UID: uint32(uid),
 		GID: uint32(gid),

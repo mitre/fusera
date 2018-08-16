@@ -40,6 +40,7 @@ type Options struct {
 	// The file used to authenticate with the SRA Data Locator API
 	Signer Signer
 	Acc    []*Accession
+	Region string
 
 	// File system
 	MountOptions      map[string]string
@@ -133,6 +134,12 @@ func NewFusera(ctx context.Context, opt *Options) (*Fusera, error) {
 			dir.mu.Lock()
 			file := NewInode(fs, dir, awsutil.String(name), &fullFileName)
 			file.Link = f.Link
+			if f.Bucket != "" {
+				file.ReqPays = true
+				file.Bucket = f.Bucket
+				file.Key = f.Key
+				file.Region = opt.Region
+			}
 			file.Acc = acc.ID
 			u, err := strconv.ParseUint(f.Size, 10, 64)
 			if err != nil {
