@@ -38,9 +38,10 @@ import (
 // Options is a collection of values that describe how Fusera should behave.
 type Options struct {
 	// The file used to authenticate with the SRA Data Locator API
-	Signer Signer
-	Acc    []*Accession
-	Region string
+	Signer  Signer
+	Acc     []*Accession
+	Region  string
+	Profile string
 
 	// File system
 	MountOptions      map[string]string
