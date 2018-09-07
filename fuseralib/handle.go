@@ -48,6 +48,10 @@ type Inode struct {
 	Attributes  InodeAttributes
 	KnownSize   *uint64
 	AttrTime    time.Time
+	ReqPays     bool
+	Bucket      string
+	Key         string
+	Region      string
 
 	mu sync.Mutex // everything below is protected by mu
 

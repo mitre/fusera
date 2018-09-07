@@ -41,10 +41,12 @@ var (
 	ngcpath   string
 	filetype  string
 
-	endpoint             string
-	awsBatch, awsDefault int = 0, 50
-	gcpBatch, gcpDefault int = 0, 25
-	eager                bool
+	endpoint                      string
+	awsBatch, awsDefault          int    = 0, 50
+	gcpBatch, gcpDefault          int    = 0, 25
+	awsProfile, awsProfileDefault string = "", "default"
+	gcpProfile, gcpProfileDefault string = "", "gcp"
+	eager                         bool
 )
 
 func init() {
@@ -78,9 +80,19 @@ func init() {
 		panic("INTERNAL ERROR: could not bind aws-batch flag to aws-batch environment variable")
 	}
 
+	mountCmd.Flags().StringVarP(&awsProfile, "aws-profile", "", awsProfileDefault, flags.AwsProfileMsg)
+	if err := viper.BindPFlag("aws-profile", mountCmd.Flags().Lookup("aws-profile")); err != nil {
+		panic("INTERNAL ERROR: could not bind aws-profile flag to aws-profile environment variable")
+	}
+
 	mountCmd.Flags().IntVarP(&gcpBatch, "gcp-batch", "", gcpDefault, flags.GcpBatchMsg)
 	if err := viper.BindPFlag("gcp-batch", mountCmd.Flags().Lookup("gcp-batch")); err != nil {
 		panic("INTERNAL ERROR: could not bind gcp-batch flag to gcp-batch environment variable")
+	}
+
+	mountCmd.Flags().StringVarP(&gcpProfile, "gcp-profile", "", gcpProfileDefault, flags.GcpProfileMsg)
+	if err := viper.BindPFlag("gcp-profile", mountCmd.Flags().Lookup("gcp-profile")); err != nil {
+		panic("INTERNAL ERROR: could not bind gcp-profile flag to gcp-profile environment variable")
 	}
 
 	mountCmd.Flags().BoolVarP(&eager, "eager", "", false, "ADVANCED: Have fusera request that urls be signed by the API on start up.\nEnvironment Variable: [$DBGAP_EAGER]")
@@ -204,10 +216,22 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 		fmt.Println("It seems like none of the accessions were successful, fusera is shutting down.")
 		os.Exit(1)
 	}
+	credProfile := ""
+	cloud := location[:2]
+	twig.Debug(cloud)
+	if cloud == "s3" {
+		credProfile = awsProfile
+	}
+	if cloud == "gs" {
+		credProfile = gcpProfile
+	}
+	twig.Debug(credProfile)
 	//
 	opt := &fuseralib.Options{
-		Signer: client,
-		Acc:    accessions,
+		Signer:  client,
+		Acc:     accessions,
+		Region:  location[3:],
+		Profile: credProfile,
 
 		UID: uint32(uid),
 		GID: uint32(gid),
@@ -236,6 +260,8 @@ func foldEnvVarsIntoFlagValues() {
 	flags.ResolveString("endpoint", &endpoint)
 	flags.ResolveInt("aws-batch", &awsBatch)
 	flags.ResolveInt("gcp-batch", &gcpBatch)
+	flags.ResolveString("aws-profile", &awsProfile)
+	flags.ResolveString("gcp-profile", &gcpProfile)
 	flags.ResolveBool("eager", &eager)
 	flags.ResolveString("location", &location)
 	flags.ResolveString("accession", &accession)

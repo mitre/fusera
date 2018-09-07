@@ -245,19 +245,27 @@ func (fh *FileHandle) readFromStream(offset int64, buf []byte) (bytesRead int, e
 		return
 	}
 
+	byteRange := ""
+	if offset != 0 {
+		byteRange = fmt.Sprintf("bytes=%v-", offset)
+	}
+
 	if fh.reader == nil {
 		if fh.inode.ErrContents == "" {
 			sd, _ := time.ParseDuration("30s")
 			exp := fh.inode.Attributes.ExpirationDate
-			// TODO: with new API behavior, this behavior changes.
-			// Public files still don't get links, but now every time starts off as
-			// IsZero. So this is fun.
-			if fh.inode.Link == "" {
+			if fh.inode.ReqPays {
+				client := awsutil.NewClient(fh.inode.Bucket, fh.inode.Key, fh.inode.Region, fh.inode.fs.opt.Profile)
+				body, err := client.GetObjectRange(byteRange)
+				if err != nil {
+					return 0, syscall.EACCES
+				}
+				fh.reader = body
+			} else if fh.inode.Link == "" {
 				// we need to get a link no matter what
 				twig.Debugf("seems like we don't have a url for: %s", *fh.inode.Name)
 				link, expiration, err := newURL(fh.inode)
 				if err != nil {
-					// fh.inode.logFuse("< readFromStream error", 0, err)
 					return 0, syscall.EACCES
 				}
 				fh.inode.Link = link
@@ -277,13 +285,7 @@ func (fh *FileHandle) readFromStream(offset int64, buf []byte) (bytesRead int, e
 					fh.inode.Attributes.ExpirationDate = expiration
 				}
 			}
-
-			bytes := ""
-			if offset != 0 {
-				bytes = fmt.Sprintf("bytes=%v-", offset)
-			}
-
-			resp, err := awsutil.GetObjectRange(fh.inode.Link, bytes)
+			resp, err := awsutil.GetObjectRange(fh.inode.Link, byteRange)
 			if err != nil {
 				return 0, err
 			}

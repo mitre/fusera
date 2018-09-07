@@ -26,11 +26,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws/credentials"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/jacobsa/fuse"
-	"github.com/mattrbianchi/twig"
 	"github.com/pkg/errors"
 )
 
@@ -82,10 +83,42 @@ func GetObjectRange(url, byteRange string) (*http.Response, error) {
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusPartialContent && resp.StatusCode != http.StatusOK {
-		twig.Debugf("status code: %d\n", resp.StatusCode)
 		return nil, parseHTTPError(resp.StatusCode)
 	}
 	return resp, nil
+}
+
+type Client struct {
+	Bucket  string
+	Key     string
+	Region  string
+	Profile string
+}
+
+func NewClient(bucket, key, region, profile string) Client {
+	return Client{
+		Bucket:  bucket,
+		Key:     key,
+		Region:  region,
+		Profile: profile,
+	}
+}
+
+func (c Client) GetObjectRange(byteRange string) (io.ReadCloser, error) {
+	cfg := (&aws.Config{
+		Credentials: credentials.NewSharedCredentials("", c.Profile),
+		Region:      aws.String(c.Region),
+	}).WithHTTPClient(newHTTPClient())
+	sess := session.New(cfg)
+	svc := s3.New(sess)
+	input := &s3.GetObjectInput{
+		Bucket:       aws.String(c.Bucket),
+		Key:          aws.String(c.Key),
+		Range:        aws.String(byteRange),
+		RequestPayer: aws.String("requester"),
+	}
+	obj, err := svc.GetObject(input)
+	return obj.Body, err
 }
 
 // Expects the url to point to a valid ngc file.
@@ -107,28 +140,11 @@ func ReadFile(path string) ([]byte, error) {
 		return nil, errors.Errorf("url did not point to a valid amazon s3 location or follow the virtual-hosted style of https://[bucket].[region].s3.amazonaws.com/[file]: %s", path)
 	}
 	bucket := sections[0]
-	twig.Debugf("bucket: %s", bucket)
 	region := sections[1]
-	twig.Debugf("region: %s", region)
 	file := u.Path
-	twig.Debugf("file: %s", file)
 	cfg := (&aws.Config{
 		Region: &region,
-	}).WithHTTPClient(&http.Client{
-		Transport: &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
-			DialContext: (&net.Dialer{
-				Timeout:   15 * time.Second,
-				KeepAlive: 15 * time.Second,
-				DualStack: true,
-			}).DialContext,
-			MaxIdleConns:          1000,
-			MaxIdleConnsPerHost:   1000,
-			IdleConnTimeout:       20 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ExpectContinueTimeout: 10 * time.Second,
-		},
-	})
+	}).WithHTTPClient(newHTTPClient())
 	sess := session.New(cfg)
 	svc := s3.New(sess)
 	input := &s3.GetObjectInput{
@@ -137,7 +153,6 @@ func ReadFile(path string) ([]byte, error) {
 	}
 	obj, err := svc.GetObject(input)
 	if err != nil {
-		twig.Debug("error from GetObject")
 		return nil, err
 	}
 	bytes, err := ioutil.ReadAll(obj.Body)
@@ -236,26 +251,38 @@ func resolveGcpZone() (string, error) {
 	return "gs." + path, nil
 }
 
+func newHTTPClient() *http.Client {
+	return &http.Client{
+		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   15 * time.Second,
+				KeepAlive: 15 * time.Second,
+				DualStack: true,
+			}).DialContext,
+			MaxIdleConns:          1000,
+			MaxIdleConnsPerHost:   1000,
+			IdleConnTimeout:       20 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 10 * time.Second,
+		},
+	}
+}
+
 func parseHTTPError(code int) error {
 	switch code {
 	case 400:
-		twig.Debug("converting to EINVAL")
 		return fuse.EINVAL
 	case 403:
-		twig.Debug("converting to EACCES")
 		return syscall.EACCES
 	case 404:
-		twig.Debug("converting to ENOENT")
 		return fuse.ENOENT
 	case 405:
-		twig.Debug("converting to ENOTSUP")
 		return syscall.ENOTSUP
 	case 500:
-		twig.Debug("converting to EAGAIN")
 		return syscall.EAGAIN
 	default:
-		// TODO: log this and re-evaluate whether this is a good move.
-		twig.Debug("converting to EOF")
+		// TODO: re-evaluate whether this is a good move.
 		return io.EOF
 	}
 }
