@@ -35,69 +35,55 @@ import (
 	"github.com/spf13/viper"
 )
 
-var (
-	location  string
-	accession string
-	ngcpath   string
-	filetype  string
-
-	endpoint                      string
-	awsBatch, awsDefault          int    = 0, 50
-	gcpBatch, gcpDefault          int    = 0, 25
-	awsProfile, awsProfileDefault string = "", "default"
-	gcpProfile, gcpProfileDefault string = "", "gcp"
-	eager                         bool
-)
-
 func init() {
-	mountCmd.Flags().StringVarP(&location, "location", "l", "", flags.LocationMsg)
+	mountCmd.Flags().StringVarP(&flags.Location, "location", "l", "", flags.LocationMsg)
 	if err := viper.BindPFlag("location", mountCmd.Flags().Lookup("location")); err != nil {
 		panic("INTERNAL ERROR: could not bind location flag to location environment variable")
 	}
 
-	mountCmd.Flags().StringVarP(&accession, "accession", "a", "", flags.AccessionMsg)
+	mountCmd.Flags().StringVarP(&flags.Accession, "accession", "a", "", flags.AccessionMsg)
 	if err := viper.BindPFlag("accession", mountCmd.Flags().Lookup("accession")); err != nil {
 		panic("INTERNAL ERROR: could not bind accession flag to accession environment variable")
 	}
 
-	mountCmd.Flags().StringVarP(&ngcpath, "ngc", "n", "", flags.NgcMsg)
+	mountCmd.Flags().StringVarP(&flags.Ngcpath, "ngc", "n", "", flags.NgcMsg)
 	if err := viper.BindPFlag("ngc", mountCmd.Flags().Lookup("ngc")); err != nil {
 		panic("INTERNAL ERROR: could not bind ngc flag to ngc environment variable")
 	}
 
-	mountCmd.Flags().StringVarP(&filetype, "filetype", "f", "", flags.FiletypeMsg)
+	mountCmd.Flags().StringVarP(&flags.Filetype, "filetype", "f", "", flags.FiletypeMsg)
 	if err := viper.BindPFlag("filetype", mountCmd.Flags().Lookup("filetype")); err != nil {
 		panic("INTERNAL ERROR: could not bind filetype flag to filetype environment variable")
 	}
 
-	mountCmd.Flags().StringVarP(&endpoint, "endpoint", "e", "https://www.ncbi.nlm.nih.gov/Traces/sdl/1/retrieve", flags.EndpointMsg)
+	mountCmd.Flags().StringVarP(&flags.Endpoint, "endpoint", "e", "https://www.ncbi.nlm.nih.gov/Traces/sdl/1/retrieve", flags.EndpointMsg)
 	if err := viper.BindPFlag("endpoint", mountCmd.Flags().Lookup("endpoint")); err != nil {
 		panic("INTERNAL ERROR: could not bind endpoint flag to endpoint environment variable")
 	}
 
-	mountCmd.Flags().IntVarP(&awsBatch, "aws-batch", "", awsDefault, flags.AwsBatchMsg)
+	mountCmd.Flags().IntVarP(&flags.AwsBatch, "aws-batch", "", flags.AwsDefault, flags.AwsBatchMsg)
 	if err := viper.BindPFlag("aws-batch", mountCmd.Flags().Lookup("aws-batch")); err != nil {
 		panic("INTERNAL ERROR: could not bind aws-batch flag to aws-batch environment variable")
 	}
 
-	mountCmd.Flags().StringVarP(&awsProfile, "aws-profile", "", awsProfileDefault, flags.AwsProfileMsg)
+	mountCmd.Flags().StringVarP(&flags.AwsProfile, "aws-profile", "", flags.AwsProfileDefault, flags.AwsProfileMsg)
 	if err := viper.BindPFlag("aws-profile", mountCmd.Flags().Lookup("aws-profile")); err != nil {
 		panic("INTERNAL ERROR: could not bind aws-profile flag to aws-profile environment variable")
 	}
 
-	mountCmd.Flags().IntVarP(&gcpBatch, "gcp-batch", "", gcpDefault, flags.GcpBatchMsg)
+	mountCmd.Flags().IntVarP(&flags.GcpBatch, "gcp-batch", "", flags.GcpDefault, flags.GcpBatchMsg)
 	if err := viper.BindPFlag("gcp-batch", mountCmd.Flags().Lookup("gcp-batch")); err != nil {
 		panic("INTERNAL ERROR: could not bind gcp-batch flag to gcp-batch environment variable")
 	}
 
-	mountCmd.Flags().StringVarP(&gcpProfile, "gcp-profile", "", gcpProfileDefault, flags.GcpProfileMsg)
+	mountCmd.Flags().StringVarP(&flags.GcpProfile, "gcp-profile", "", flags.GcpProfileDefault, flags.GcpProfileMsg)
 	if err := viper.BindPFlag("gcp-profile", mountCmd.Flags().Lookup("gcp-profile")); err != nil {
 		panic("INTERNAL ERROR: could not bind gcp-profile flag to gcp-profile environment variable")
 	}
 
-	mountCmd.Flags().BoolVarP(&eager, "eager", "", false, "ADVANCED: Have fusera request that urls be signed by the API on start up.\nEnvironment Variable: [$DBGAP_EAGER]")
+	mountCmd.Flags().BoolVarP(&flags.Eager, "eager", "", false, "ADVANCED: Have fusera request that urls be signed by the API on start up.\nEnvironment Variable: [$DBGAP_EAGER]")
 	if err := viper.BindPFlag("eager", mountCmd.Flags().Lookup("eager")); err != nil {
-		panic("INTERNAL ERROR: could not bind gcp-batch flag to gcp-batch environment variable")
+		panic("INTERNAL ERROR: could not bind eager flag to eager environment variable")
 	}
 
 	rootCmd.AddCommand(mountCmd)
@@ -116,22 +102,22 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 	setConfig()
 	foldEnvVarsIntoFlagValues()
 	var ngc []byte
-	if ngcpath != "" {
-		ngc, err = flags.ResolveNgcFile(ngcpath)
+	if flags.Ngcpath != "" {
+		ngc, err = flags.ResolveNgcFile(flags.Ngcpath)
 		if err != nil {
 			return err
 		}
 	}
-	if accession == "" {
+	if flags.Accession == "" {
 		return errors.New("no accessions provided")
 	}
-	accs, err := flags.ResolveAccession(accession)
+	accs, err := flags.ResolveAccession(flags.Accession)
 	if err != nil {
 		return err
 	}
 	var types map[string]bool
-	if filetype != "" {
-		types, err = flags.ResolveFileType(filetype)
+	if flags.Filetype != "" {
+		types, err = flags.ResolveFileType(flags.Filetype)
 		if err != nil {
 			return err
 		}
@@ -147,8 +133,8 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 		return errors.New("incorrect permissions for mountpoint")
 	}
 	// Location takes longest if there's a failure, so validate it last.
-	if location == "" {
-		location, err = flags.ResolveLocation()
+	if flags.Location == "" {
+		flags.Location, err = flags.ResolveLocation()
 		if err != nil {
 			twig.Debug(err)
 			return errors.New("no location provided")
@@ -156,89 +142,88 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 	}
 
 	uid, gid := myUserAndGroup()
-	batch := flags.ResolveBatch(location, awsBatch, gcpBatch)
+	batch := flags.ResolveBatch(flags.Location, flags.AwsBatch, flags.GcpBatch)
 
-	client := sdl.NewClient(endpoint, location, ngc, types)
 	var accessions []*fuseralib.Accession
+	var client fuseralib.API
 	var rootErr []byte
-	if !eager {
-		dot := 2000
-		i := 0
-		for dot < len(accs) {
-			aa, err := client.GetMetadata(accs[i:dot])
-			if err != nil {
-				rootErr = append(rootErr, []byte(fmt.Sprintln(err.Error()))...)
-				rootErr = append(rootErr, []byte("List of accessions that failed in this batch:\n")...)
-				rootErr = append(rootErr, []byte(fmt.Sprintln(accs[i:dot]))...)
-				fmt.Println(string(rootErr))
-			} else {
-				accessions = append(accessions, aa...)
-			}
-			i = dot
-			dot += batch
-		}
-		aa, err := client.GetMetadata(accs[i:])
+	if flags.Eager {
+		client = sdl.NewEagerClient(flags.Endpoint, flags.Location, ngc, types)
+	} else {
+		client = sdl.NewClient(flags.Endpoint, flags.Location, ngc, types)
+	}
+	if flags.Verbose {
+		fmt.Printf("Communicating with SDL API at: %s\n", flags.Endpoint)
+		fmt.Printf("Using ngc at: %s\n", flags.Ngcpath)
+		fmt.Printf("Contents of ngc file: %v\n", ngc)
+		fmt.Printf("Limiting file types to: %v\n", types)
+		fmt.Printf("Giving location as: %s\n", flags.Location)
+		fmt.Printf("Requesting accessions in batches of: %d\n", batch)
+	}
+	dot := batch
+	i := 0
+	for dot < len(accs) {
+		aa, err := client.Retrieve(accs[i:dot])
 		if err != nil {
 			rootErr = append(rootErr, []byte(fmt.Sprintln(err.Error()))...)
 			rootErr = append(rootErr, []byte("List of accessions that failed in this batch:\n")...)
-			rootErr = append(rootErr, []byte(fmt.Sprintln(accs[i:]))...)
-			fmt.Println(string(rootErr))
+			rootErr = append(rootErr, []byte(fmt.Sprintln(accs[i:dot]))...)
+			if !flags.Silent {
+				fmt.Println(string(rootErr))
+			}
 		} else {
 			accessions = append(accessions, aa...)
+		}
+		i = dot
+		dot += batch
+	}
+	aa, err := client.Retrieve(accs[i:])
+	if err != nil {
+		rootErr = append(rootErr, []byte(fmt.Sprintln(err.Error()))...)
+		rootErr = append(rootErr, []byte("List of accessions that failed in this batch:\n")...)
+		rootErr = append(rootErr, []byte(fmt.Sprintln(accs[i:]))...)
+		if !flags.Silent {
+			fmt.Println(string(rootErr))
 		}
 	} else {
-		dot := batch
-		i := 0
-		for dot < len(accs) {
-			aa, err := client.GetSignedURL(accs[i:dot])
-			if err != nil {
-				rootErr = append(rootErr, []byte(fmt.Sprintln(err.Error()))...)
-				rootErr = append(rootErr, []byte("List of accessions that failed in this batch:\n")...)
-				rootErr = append(rootErr, []byte(fmt.Sprintln(accs[i:dot]))...)
-				fmt.Println(string(rootErr))
-			} else {
-				accessions = append(accessions, aa...)
-			}
-			i = dot
-			dot += batch
-		}
-		aa, err := client.GetSignedURL(accs[i:])
-		if err != nil {
-			rootErr = append(rootErr, []byte(fmt.Sprintln(err.Error()))...)
-			rootErr = append(rootErr, []byte("List of accessions that failed in this batch:\n")...)
-			rootErr = append(rootErr, []byte(fmt.Sprintln(accs[i:]))...)
-			fmt.Println(string(rootErr))
-		} else {
-			accessions = append(accessions, aa...)
-		}
+		accessions = append(accessions, aa...)
 	}
 	if len(accessions) == 0 {
-		fmt.Println("It seems like none of the accessions were successful, fusera is shutting down.")
+		if !flags.Silent {
+			fmt.Println("It seems like none of the accessions were successful, fusera is shutting down.")
+		}
 		os.Exit(1)
 	}
 	credProfile := ""
-	cloud := location[:2]
-	twig.Debug(cloud)
+	cloud := flags.Location[:2]
 	if cloud == "s3" {
-		credProfile = awsProfile
+		credProfile = flags.AwsProfile
 	}
 	if cloud == "gs" {
-		credProfile = gcpProfile
+		credProfile = flags.GcpProfile
 	}
-	twig.Debug(credProfile)
-	//
 	opt := &fuseralib.Options{
-		Signer:  client,
+		API:     client,
 		Acc:     accessions,
-		Region:  location[3:],
+		Region:  flags.Location[3:],
 		Profile: credProfile,
 
-		UID: uint32(uid),
-		GID: uint32(gid),
-		// TODO: won't need.
+		UID:           uint32(uid),
+		GID:           uint32(gid),
 		MountOptions:  make(map[string]string),
 		MountPoint:    mountpoint,
 		MountPointArg: mountpoint,
+	}
+
+	if flags.Verbose {
+		fmt.Printf("Profile for credentials if needed: %s\n", credProfile)
+		fmt.Printf("Region: %s\n", opt.Region)
+		fmt.Printf("Mountpoint: %s\n", opt.MountPoint)
+	}
+
+	if !flags.Silent {
+		fmt.Println("Fusera is ready!")
+		fmt.Println("Remember, Fusera needs to keep running in order to serve your files, don't close this terminal!")
 	}
 	fs, mfs, err := fuseralib.Mount(context.Background(), opt)
 	if err != nil {
@@ -257,16 +242,16 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 }
 
 func foldEnvVarsIntoFlagValues() {
-	flags.ResolveString("endpoint", &endpoint)
-	flags.ResolveInt("aws-batch", &awsBatch)
-	flags.ResolveInt("gcp-batch", &gcpBatch)
-	flags.ResolveString("aws-profile", &awsProfile)
-	flags.ResolveString("gcp-profile", &gcpProfile)
-	flags.ResolveBool("eager", &eager)
-	flags.ResolveString("location", &location)
-	flags.ResolveString("accession", &accession)
-	flags.ResolveString("ngc", &ngcpath)
-	flags.ResolveString("filetype", &filetype)
+	flags.ResolveString("endpoint", &flags.Endpoint)
+	flags.ResolveInt("aws-batch", &flags.AwsBatch)
+	flags.ResolveInt("gcp-batch", &flags.GcpBatch)
+	flags.ResolveString("aws-profile", &flags.AwsProfile)
+	flags.ResolveString("gcp-profile", &flags.GcpProfile)
+	flags.ResolveBool("eager", &flags.Eager)
+	flags.ResolveString("location", &flags.Location)
+	flags.ResolveString("accession", &flags.Accession)
+	flags.ResolveString("ngc", &flags.Ngcpath)
+	flags.ResolveString("filetype", &flags.Filetype)
 }
 
 func myUserAndGroup() (int, int) {

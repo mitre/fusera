@@ -20,10 +20,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"mime/multipart"
 	"net/http"
+	"net/http/httputil"
 	"strings"
 
+	"github.com/mitre/fusera/flags"
 	"github.com/mitre/fusera/fuseralib"
 	"github.com/pkg/errors"
 )
@@ -54,14 +57,35 @@ type Client struct {
 	ngc      []byte
 }
 
-// GetMetadata has the SDL API return meta information for all files under the given accessions.
-// accessions: the accessions to get metadata for.
-func (c *Client) GetMetadata(accessions []string) ([]*fuseralib.Accession, error) {
-	return c.makeRequest(accessions, true)
+func (c *Client) Retrieve(accessions []string) ([]*fuseralib.Accession, error) {
+	return c.makeRequest(accessions, false)
 }
 
-func (c *Client) GetSignedURL(accessions []string) ([]*fuseralib.Accession, error) {
-	return c.makeRequest(accessions, false)
+func NewEagerClient(url, loc string, ngc []byte, types map[string]bool) *EagerClient {
+	if url == "" {
+		url = "https://www.ncbi.nlm.nih.gov/Traces/sdl/1/retrieve"
+	}
+	if loc == "" {
+		return nil
+	}
+	return &EagerClient{
+		Client: Client{
+			url:      url,
+			location: loc,
+			types:    types,
+			ngc:      ngc,
+		},
+	}
+}
+
+type EagerClient struct {
+	Client
+}
+
+// Retrieve has the SDL API return meta information for all files under the given accessions.
+// accessions: the accessions to get metadata for.
+func (c *EagerClient) Retrieve(accessions []string) ([]*fuseralib.Accession, error) {
+	return c.makeRequest(accessions, true)
 }
 
 // SignAccession has the SDL API create signed urls for all files under the given accession.
@@ -92,16 +116,33 @@ func (c *Client) makeRequest(accessions []string, meta bool) ([]*fuseralib.Acces
 		return nil, errors.New("can't create request to SDL API")
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
+	if flags.Verbose {
+		reqdump, err := httputil.DumpRequestOut(req, true)
+		if err != nil {
+			return nil, errors.New("INTERNAL ERROR: failed to print request to API for verbose")
+		}
+		fmt.Println("REQUEST TO API")
+		fmt.Println(string(reqdump))
+	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, errors.New("can't send request to SDL API")
 	}
 	defer resp.Body.Close()
+	if flags.Verbose {
+		resdump, err := httputil.DumpResponse(resp, true)
+		if err != nil {
+			return nil, errors.New("INTERNAL ERROR: failed to print response from API for verbose")
+		}
+		fmt.Println("RESPONSE FROM API")
+		fmt.Println(string(resdump))
+	}
 	if resp.StatusCode != http.StatusOK {
 		var errPayload Payload
 		err := json.NewDecoder(resp.Body).Decode(&errPayload)
 		if err != nil {
-			return nil, errors.Wrapf(err, "failed to decode error message from SDL API after getting HTTP status: %d: %s", resp.StatusCode, resp.Status)
+			response, _ := ioutil.ReadAll(resp.Body)
+			return nil, errors.Errorf("failed to decode error message from SDL API after getting HTTP status: %d: %s\nResponse:%v\n", resp.StatusCode, resp.Status, string(response))
 		}
 		return nil, errors.Errorf("SDL API returned error: %d: %s", errPayload.Status, errPayload.Message)
 	}
@@ -124,6 +165,9 @@ func sanitize(payload []Payload) ([]*fuseralib.Accession, error) {
 			errmsg = fmt.Sprintf("Some errors were encountered with %s:\n", p.ID)
 			errmsg = errmsg + fmt.Sprintf("%d\t%s\n", p.Status, p.Message)
 			errAcc := &fuseralib.Accession{ID: p.ID, Files: make(map[string]fuseralib.File)}
+			if !flags.Silent {
+				fmt.Println(errmsg)
+			}
 			if a, ok := accs[p.ID]; ok {
 				// so we have a duplicate acc...
 				errAcc = a
@@ -141,6 +185,9 @@ func sanitize(payload []Payload) ([]*fuseralib.Accession, error) {
 		for _, f := range p.Files {
 			// Checking if something is wrong with the individual files
 			if f.Name == "" {
+				if !flags.Silent {
+					fmt.Printf("API returned no name field for file: %v\n", f)
+				}
 				acc.AppendError(fmt.Sprintf("API returned no name field for file: %v\n", f))
 				accs[acc.ID] = acc
 				continue
@@ -152,7 +199,7 @@ func sanitize(payload []Payload) ([]*fuseralib.Accession, error) {
 	}
 	var err error
 	if !successfulAccessionExists {
-		err = errors.New("API returned no accessions")
+		err = errors.New("API returned no usable accessions")
 	}
 	list := make([]*fuseralib.Accession, 0, len(accs))
 	for _, v := range accs {

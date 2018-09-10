@@ -26,6 +26,7 @@ import (
 
 	"github.com/mattrbianchi/twig"
 	"github.com/mitre/fusera/awsutil"
+	"github.com/mitre/fusera/flags"
 	"github.com/pkg/errors"
 
 	"github.com/jacobsa/fuse"
@@ -263,7 +264,9 @@ func (fh *FileHandle) readFromStream(offset int64, buf []byte) (bytesRead int, e
 				fh.reader = body
 			} else if fh.inode.Link == "" {
 				// we need to get a link no matter what
-				twig.Debugf("seems like we don't have a url for: %s", *fh.inode.Name)
+				if flags.Verbose {
+					fmt.Printf("seems like we don't have a url for: %s\n", *fh.inode.Name)
+				}
 				link, expiration, err := newURL(fh.inode)
 				if err != nil {
 					return 0, syscall.EACCES
@@ -272,9 +275,13 @@ func (fh *FileHandle) readFromStream(offset int64, buf []byte) (bytesRead int, e
 				fh.inode.Attributes.ExpirationDate = expiration
 			} else if !exp.IsZero() && time.Until(exp) < sd {
 				// so the expiration date isn't zero and it's about to expire
-				twig.Debugf("seems like we have a url that expires: %s", exp)
+				if flags.Verbose {
+					fmt.Printf("seems like we have a url that expires: %s\n", exp)
+				}
 				if time.Until(exp) < sd {
-					twig.Debug("url is expired")
+					if flags.Verbose {
+						fmt.Println("url is expired")
+					}
 					// Time to hot swap urls!
 					link, expiration, err := newURL(fh.inode)
 					if err != nil {
@@ -299,8 +306,10 @@ func (fh *FileHandle) readFromStream(offset int64, buf []byte) (bytesRead int, e
 
 	bytesRead, err = fh.reader.Read(buf)
 	if err != nil {
-		twig.Debug("error reading file")
-		twig.Debug(err.Error())
+		if flags.Verbose {
+			fmt.Println("error reading file")
+			fmt.Println(err.Error())
+		}
 		if err != io.EOF {
 			twig.Debugf("readFromStream error: %s", err.Error())
 			// fh.inode.logFuse("< readFromStream error", bytesRead, err)
@@ -319,17 +328,23 @@ func newURL(inode *Inode) (string, time.Time, error) {
 	if err != nil {
 		return "", time.Now(), errors.Wrapf(err, "issue contacting API while trying to renew signed url for:\naccession: %s\nfile: %s\n", inode.Acc, inode.Name)
 	}
-	twig.Debug("resolved a url")
+	if flags.Verbose {
+		fmt.Println("got a response from API")
+	}
 	for _, f := range accession.Files {
 		if f.Name == *inode.Name {
-			twig.Debug("got a new link")
 			if f.Link == "" {
 				return "", time.Now(), errors.Errorf("API did not give new signed url for:\naccession: %s\nfile: %s\n", inode.Acc, *inode.Name)
+			}
+			if flags.Verbose {
+				fmt.Printf("got a new link: %s\n", f.Link)
 			}
 			return f.Link, f.ExpirationDate, nil
 		}
 	}
-	twig.Debug("did not get a new link")
+	if flags.Verbose {
+		twig.Debug("did not get a new link")
+	}
 	return "", time.Now(), errors.Errorf("couldn't get new signed url for:\naccession: %s\nfile: %s\n", inode.Acc, *inode.Name)
 }
 
