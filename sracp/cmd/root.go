@@ -136,12 +136,12 @@ var rootCmd = &cobra.Command{
 		}
 		path := args[0]
 		batch := flags.ResolveBatch(location, awsBatch, gcpBatch)
-		client := sdl.NewClient(endpoint, location, ngc, types)
+		client := sdl.NewEagerClient(endpoint, location, ngc, types)
 		var accessions []*fuseralib.Accession
 		dot := batch
 		i := 0
 		for dot < len(accs) {
-			aa, err := client.GetSignedURL(accs[i:dot])
+			aa, err := client.Retrieve(accs[i:dot])
 			if err != nil {
 				fmt.Println(err.Error())
 				fmt.Println("List of accessions that failed in this batch:")
@@ -152,7 +152,7 @@ var rootCmd = &cobra.Command{
 			i = dot
 			dot += batch
 		}
-		aa, err := client.GetSignedURL(accs[i:])
+		aa, err := client.Retrieve(accs[i:])
 		if err != nil {
 			fmt.Println(err.Error())
 			fmt.Println("List of accessions that failed in this batch:")

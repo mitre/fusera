@@ -25,13 +25,25 @@ import (
 )
 
 var (
-	debug bool
+	debug   bool
+	verbose bool
+	silent  bool
 )
 
 func init() {
-	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "Enable debug output.")
-	if err := viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug")); err != nil {
-		panic("INTERNAL ERROR: could not bind debug flag to debug environment variable")
+	// rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "Enable debug output.")
+	// if err := viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug")); err != nil {
+	// 	panic("INTERNAL ERROR: could not bind debug flag to debug environment variable")
+	// }
+
+	rootCmd.PersistentFlags().BoolVarP(&flags.Silent, "silent", "s", false, flags.SilentMsg)
+	if err := viper.BindPFlag("silent", mountCmd.Flags().Lookup("silent")); err != nil {
+		panic("INTERNAL ERROR: could not bind silent flag to silent environment variable")
+	}
+
+	rootCmd.PersistentFlags().BoolVarP(&flags.Verbose, "verbose", "v", false, flags.VerboseMsg)
+	if err := viper.BindPFlag("verbose", mountCmd.Flags().Lookup("verbose")); err != nil {
+		panic("INTERNAL ERROR: could not bind verbose flag to verbose environment variable")
 	}
 
 	viper.SetEnvPrefix(flags.EnvPrefix)
@@ -57,4 +69,7 @@ func Execute() {
 func setConfig() {
 	// If debug flag gets set, print debug statements.
 	twig.SetDebug(debug)
+	if flags.Silent {
+		flags.Verbose = false
+	}
 }
