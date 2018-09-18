@@ -55,11 +55,6 @@ func init() {
 		panic("INTERNAL ERROR: could not bind debug flag to debug environment variable")
 	}
 
-	rootCmd.Flags().StringVarP(&location, "location", "l", "", flags.LocationMsg)
-	if err := viper.BindPFlag("location", rootCmd.Flags().Lookup("location")); err != nil {
-		panic("INTERNAL ERROR: could not bind location flag to location environment variable")
-	}
-
 	rootCmd.Flags().StringVarP(&accession, "accession", "a", "", flags.AccessionMsg)
 	if err := viper.BindPFlag("accession", rootCmd.Flags().Lookup("accession")); err != nil {
 		panic("INTERNAL ERROR: could not bind accession flag to accession environment variable")
@@ -120,12 +115,10 @@ var rootCmd = &cobra.Command{
 		}
 
 		// Location takes longest if there's a failure, so validate it last.
-		if location == "" {
-			location, err = flags.ResolveLocation()
-			if err != nil {
-				twig.Debug(err)
-				return errors.New("no location: a location was not provided so sracp attempted to resolve the location itself, this feature is only supported when sracp is running on Amazon or Google's cloud platforms")
-			}
+		location, err = flags.ResolveLocation()
+		if err != nil {
+			twig.Debug(err)
+			return errors.New("sracp could not resolve which cloud platform it is running on")
 		}
 		var types map[string]bool
 		if filetype != "" {
@@ -265,7 +258,6 @@ func foldEnvVarsIntoFlagValues() {
 	flags.ResolveString("endpoint", &endpoint)
 	flags.ResolveInt("aws-batch", &awsBatch)
 	flags.ResolveInt("gcp-batch", &gcpBatch)
-	flags.ResolveString("location", &location)
 	flags.ResolveString("accession", &accession)
 	flags.ResolveString("ngc", &ngcpath)
 	flags.ResolveString("filetype", &filetype)

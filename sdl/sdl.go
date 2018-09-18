@@ -31,9 +31,13 @@ import (
 	"github.com/pkg/errors"
 )
 
+var (
+	defaultEndpoint string = "https://www.ncbi.nlm.nih.gov/Traces/sdl/1/retrieve"
+)
+
 func NewClient(url, loc string, ngc []byte, types map[string]bool) *Client {
 	if url == "" {
-		url = "https://www.ncbi.nlm.nih.gov/Traces/sdl/1/retrieve"
+		url = defaultEndpoint
 	}
 	if loc == "" {
 		return nil
@@ -63,7 +67,7 @@ func (c *Client) Retrieve(accessions []string) ([]*fuseralib.Accession, error) {
 
 func NewEagerClient(url, loc string, ngc []byte, types map[string]bool) *EagerClient {
 	if url == "" {
-		url = "https://www.ncbi.nlm.nih.gov/Traces/sdl/1/retrieve"
+		url = defaultEndpoint
 	}
 	if loc == "" {
 		return nil
@@ -88,7 +92,7 @@ func (c *EagerClient) Retrieve(accessions []string) ([]*fuseralib.Accession, err
 	return c.makeRequest(accessions, true)
 }
 
-// SignAccession has the SDL API create signed urls for all files under the given accession.
+// Sign has the SDL API create signed urls for all files under the given accession.
 func (c *Client) Sign(accession string) (*fuseralib.Accession, error) {
 	accs, err := c.makeRequest([]string{accession}, false)
 	if err != nil {
