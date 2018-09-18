@@ -36,11 +36,6 @@ import (
 )
 
 func init() {
-	mountCmd.Flags().StringVarP(&flags.Location, "location", "l", "", flags.LocationMsg)
-	if err := viper.BindPFlag("location", mountCmd.Flags().Lookup("location")); err != nil {
-		panic("INTERNAL ERROR: could not bind location flag to location environment variable")
-	}
-
 	mountCmd.Flags().StringVarP(&flags.Accession, "accession", "a", "", flags.AccessionMsg)
 	if err := viper.BindPFlag("accession", mountCmd.Flags().Lookup("accession")); err != nil {
 		panic("INTERNAL ERROR: could not bind accession flag to accession environment variable")
@@ -133,12 +128,12 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 		return errors.New("incorrect permissions for mountpoint")
 	}
 	// Location takes longest if there's a failure, so validate it last.
-	if flags.Location == "" {
-		flags.Location, err = flags.ResolveLocation()
-		if err != nil {
-			twig.Debug(err)
-			return errors.New("no location provided")
+	flags.Location, err = flags.ResolveLocation()
+	if err != nil {
+		if flags.Verbose {
+			fmt.Println(err)
 		}
+		return errors.New("fusera could not resolve which cloud platform it is running on")
 	}
 
 	uid, gid := myUserAndGroup()
@@ -248,7 +243,6 @@ func foldEnvVarsIntoFlagValues() {
 	flags.ResolveString("aws-profile", &flags.AwsProfile)
 	flags.ResolveString("gcp-profile", &flags.GcpProfile)
 	flags.ResolveBool("eager", &flags.Eager)
-	flags.ResolveString("location", &flags.Location)
 	flags.ResolveString("accession", &flags.Accession)
 	flags.ResolveString("ngc", &flags.Ngcpath)
 	flags.ResolveString("filetype", &flags.Filetype)
