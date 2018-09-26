@@ -62,7 +62,7 @@ type Client struct {
 }
 
 func (c *Client) Retrieve(accessions []string) ([]*fuseralib.Accession, error) {
-	return c.makeRequest(accessions, false)
+	return c.makeRequest(accessions, true)
 }
 
 func NewEagerClient(url, loc string, ngc []byte, types map[string]bool) *EagerClient {
@@ -89,7 +89,7 @@ type EagerClient struct {
 // Retrieve has the SDL API return meta information for all files under the given accessions.
 // accessions: the accessions to get metadata for.
 func (c *EagerClient) Retrieve(accessions []string) ([]*fuseralib.Accession, error) {
-	return c.makeRequest(accessions, true)
+	return c.makeRequest(accessions, false)
 }
 
 // Sign has the SDL API create signed urls for all files under the given accession.
