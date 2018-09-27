@@ -78,6 +78,9 @@ func GetObjectRange(url, byteRange string) (*http.Response, error) {
 	if byteRange != "" {
 		req.Header.Add("Range", byteRange)
 	}
+	// In case it's an FTP server, we want to prevent it from compressing the
+	// file data.
+	req.Header.Add("Accept-Encoding", "identity")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
