@@ -24,6 +24,7 @@ import (
 	"os/signal"
 	"os/user"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/mattrbianchi/twig"
@@ -131,6 +132,9 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 	// So it must be readable
 	if !flags.HavePermissions(mountpoint) {
 		return errors.New("incorrect permissions for mountpoint")
+	}
+	if strings.HasPrefix(flags.Location, "gs") {
+		return errors.New("the manual setting of a google cloud location is not permitted, please allow fusera to resolve the location itself")
 	}
 	// Location takes longest if there's a failure, so validate it last.
 	if flags.Location == "" {
