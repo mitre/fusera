@@ -52,6 +52,7 @@ type Inode struct {
 	Bucket      string
 	Key         string
 	Region      string
+	Platform    *awsutil.Platform
 
 	mu sync.Mutex // everything below is protected by mu
 

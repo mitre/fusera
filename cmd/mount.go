@@ -28,6 +28,7 @@ import (
 	"syscall"
 
 	"github.com/mattrbianchi/twig"
+	"github.com/mitre/fusera/awsutil"
 	"github.com/mitre/fusera/flags"
 	"github.com/mitre/fusera/fuseralib"
 	"github.com/mitre/fusera/sdl"
@@ -47,9 +48,9 @@ func init() {
 		panic("INTERNAL ERROR: could not bind accession flag to accession environment variable")
 	}
 
-	mountCmd.Flags().StringVarP(&flags.Ngcpath, "ngc", "n", "", flags.NgcMsg)
-	if err := viper.BindPFlag("ngc", mountCmd.Flags().Lookup("ngc")); err != nil {
-		panic("INTERNAL ERROR: could not bind ngc flag to ngc environment variable")
+	mountCmd.Flags().StringVarP(&flags.Tokenpath, "token", "t", "", flags.TokenMsg)
+	if err := viper.BindPFlag("token", mountCmd.Flags().Lookup("token")); err != nil {
+		panic("INTERNAL ERROR: could not bind token flag to token environment variable")
 	}
 
 	mountCmd.Flags().StringVarP(&flags.Filetype, "filetype", "f", "", flags.FiletypeMsg)
@@ -102,19 +103,19 @@ var mountCmd = &cobra.Command{
 func mount(cmd *cobra.Command, args []string) (err error) {
 	setConfig()
 	foldEnvVarsIntoFlagValues()
-	var ngc []byte
-	if flags.Ngcpath != "" {
-		ngc, err = flags.ResolveNgcFile(flags.Ngcpath)
+	var token []byte
+	if flags.Tokenpath != "" {
+		token, err = flags.ResolveNgcFile(flags.Tokenpath)
 		if err != nil {
 			return err
 		}
 	}
-	if flags.Accession == "" {
-		return errors.New("no accessions provided")
-	}
-	accs, err := flags.ResolveAccession(flags.Accession)
-	if err != nil {
-		return err
+	var accs []string
+	if flags.Accession != "" {
+		accs, err = flags.ResolveAccession(flags.Accession)
+		if err != nil {
+			return err
+		}
 	}
 	var types map[string]bool
 	if flags.Filetype != "" {
@@ -137,60 +138,74 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 		return errors.New("the manual setting of a google cloud location is not permitted, please allow fusera to resolve the location itself")
 	}
 	// Location takes longest if there's a failure, so validate it last.
+	var platform *awsutil.Platform
 	if flags.Location == "" {
-		flags.Location, err = flags.ResolveLocation()
+		platform, err = flags.RetrieveLocation()
 		if err != nil {
 			twig.Debug(err)
+			fmt.Println(err)
 			return errors.New("no location provided")
 		}
 	}
 
 	uid, gid := myUserAndGroup()
-	batch := flags.ResolveBatch(flags.Location, flags.AwsBatch, flags.GcpBatch)
+	batch := flags.ResolveBatch(platform.Name, flags.AwsBatch, flags.GcpBatch)
 
 	var accessions []*fuseralib.Accession
 	var client fuseralib.API
 	var rootErr []byte
 	if flags.Eager {
-		client = sdl.NewEagerClient(flags.Endpoint, flags.Location, ngc, types)
+		client = sdl.NewEagerClient(flags.Endpoint, platform.Region, token, types)
 	} else {
-		client = sdl.NewClient(flags.Endpoint, flags.Location, ngc, types)
+		client = sdl.NewClient(flags.Endpoint, platform.Region, token, types)
 	}
 	if flags.Verbose {
 		fmt.Printf("Communicating with SDL API at: %s\n", flags.Endpoint)
-		fmt.Printf("Using ngc at: %s\n", flags.Ngcpath)
-		fmt.Printf("Contents of ngc file: %v\n", ngc)
+		fmt.Printf("Using token at: %s\n", flags.Tokenpath)
+		fmt.Printf("Contents of token: %s\n", string(token[:]))
 		fmt.Printf("Limiting file types to: %v\n", types)
-		fmt.Printf("Giving location as: %s\n", flags.Location)
+		fmt.Printf("Giving location as: %s\n", string(platform.Region[:]))
 		fmt.Printf("Requesting accessions in batches of: %d\n", batch)
 	}
-	dot := batch
-	i := 0
-	for dot < len(accs) {
-		aa, err := client.Retrieve(accs[i:dot])
+	if accs == nil || len(accs) == 0 { // We have no accessions
+		aa, err := client.Retrieve(nil)
 		if err != nil {
 			rootErr = append(rootErr, []byte(fmt.Sprintln(err.Error()))...)
-			rootErr = append(rootErr, []byte("List of accessions that failed in this batch:\n")...)
-			rootErr = append(rootErr, []byte(fmt.Sprintln(accs[i:dot]))...)
 			if !flags.Silent {
 				fmt.Println(string(rootErr))
 			}
 		} else {
 			accessions = append(accessions, aa...)
 		}
-		i = dot
-		dot += batch
-	}
-	aa, err := client.Retrieve(accs[i:])
-	if err != nil {
-		rootErr = append(rootErr, []byte(fmt.Sprintln(err.Error()))...)
-		rootErr = append(rootErr, []byte("List of accessions that failed in this batch:\n")...)
-		rootErr = append(rootErr, []byte(fmt.Sprintln(accs[i:]))...)
-		if !flags.Silent {
-			fmt.Println(string(rootErr))
+	} else { // We have accessions and we need to respect batch sizes.
+		dot := batch
+		i := 0
+		for dot < len(accs) {
+			aa, err := client.Retrieve(accs[i:dot])
+			if err != nil {
+				rootErr = append(rootErr, []byte(fmt.Sprintln(err.Error()))...)
+				rootErr = append(rootErr, []byte("List of accessions that failed in this batch:\n")...)
+				rootErr = append(rootErr, []byte(fmt.Sprintln(accs[i:dot]))...)
+				if !flags.Silent {
+					fmt.Println(string(rootErr))
+				}
+			} else {
+				accessions = append(accessions, aa...)
+			}
+			i = dot
+			dot += batch
 		}
-	} else {
-		accessions = append(accessions, aa...)
+		aa, err := client.Retrieve(accs[i:])
+		if err != nil {
+			rootErr = append(rootErr, []byte(fmt.Sprintln(err.Error()))...)
+			rootErr = append(rootErr, []byte("List of accessions that failed in this batch:\n")...)
+			rootErr = append(rootErr, []byte(fmt.Sprintln(accs[i:]))...)
+			if !flags.Silent {
+				fmt.Println(string(rootErr))
+			}
+		} else {
+			accessions = append(accessions, aa...)
+		}
 	}
 	if len(accessions) == 0 {
 		if !flags.Silent {
@@ -199,18 +214,17 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 		os.Exit(1)
 	}
 	credProfile := ""
-	cloud := flags.Location[:2]
-	if cloud == "s3" {
+	if platform.Name == "s3" {
 		credProfile = flags.AwsProfile
 	}
-	if cloud == "gs" {
+	if platform.Name == "gs" {
 		credProfile = flags.GcpProfile
 	}
 	opt := &fuseralib.Options{
-		API:     client,
-		Acc:     accessions,
-		Region:  flags.Location[3:],
-		Profile: credProfile,
+		API:      client,
+		Acc:      accessions,
+		Platform: platform,
+		Profile:  credProfile,
 
 		UID:           uint32(uid),
 		GID:           uint32(gid),
@@ -221,7 +235,8 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 
 	if flags.Verbose {
 		fmt.Printf("Profile for credentials if needed: %s\n", credProfile)
-		fmt.Printf("Region: %s\n", opt.Region)
+		fmt.Printf("Platform: %s\n", opt.Platform.Name)
+		fmt.Printf("Region: %s\n", string(opt.Platform.Region))
 		fmt.Printf("Mountpoint: %s\n", opt.MountPoint)
 	}
 
@@ -254,7 +269,7 @@ func foldEnvVarsIntoFlagValues() {
 	flags.ResolveBool("eager", &flags.Eager)
 	flags.ResolveString("location", &flags.Location)
 	flags.ResolveString("accession", &flags.Accession)
-	flags.ResolveString("ngc", &flags.Ngcpath)
+	flags.ResolveString("token", &flags.Tokenpath)
 	flags.ResolveString("filetype", &flags.Filetype)
 }
 

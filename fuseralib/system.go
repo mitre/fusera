@@ -38,10 +38,11 @@ import (
 // Options is a collection of values that describe how Fusera should behave.
 type Options struct {
 	// The file used to authenticate with the SRA Data Locator API
-	API     API
-	Acc     []*Accession
-	Region  string
-	Profile string
+	API API
+	Acc []*Accession
+	//Region   string
+	Platform *awsutil.Platform
+	Profile  string
 
 	// File system
 	MountOptions      map[string]string
@@ -81,9 +82,8 @@ func Mount(ctx context.Context, opt *Options) (*Fusera, *fuse.MountedFileSystem,
 
 func NewFusera(ctx context.Context, opt *Options) (*Fusera, error) {
 	fs := &Fusera{
-		signer: opt.API,
-		accs:   opt.Acc,
-		// TODO: I don't think Fusera needs opt anymore.
+		signer:   opt.API,
+		accs:     opt.Acc,
 		opt:      opt,
 		DirMode:  0555,
 		FileMode: 0444,
@@ -139,7 +139,8 @@ func NewFusera(ctx context.Context, opt *Options) (*Fusera, error) {
 				file.ReqPays = true
 				file.Bucket = f.Bucket
 				file.Key = f.Key
-				file.Region = opt.Region
+				file.Region = f.Region
+				file.Platform = opt.Platform
 			}
 			file.Acc = acc.ID
 			u, err := strconv.ParseUint(f.Size, 10, 64)

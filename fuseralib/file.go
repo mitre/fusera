@@ -323,10 +323,11 @@ func (fh *FileHandle) readFromStream(offset int64, buf []byte) (bytesRead int, e
 	return
 }
 
+// TODO: If on GCP, we now need to get a new instance token everytime we want a new url
 func newURL(inode *Inode) (string, time.Time, error) {
 	accession, err := inode.fs.signer.Sign(inode.Acc)
 	if err != nil {
-		return "", time.Now(), errors.Wrapf(err, "issue contacting API while trying to renew signed url for:\naccession: %s\nfile: %s\n", inode.Acc, inode.Name)
+		return "", time.Now(), errors.Wrapf(err, "issue contacting API while trying to renew signed url for:\naccession: %s\nfile: %s\n", inode.Acc, *inode.Name)
 	}
 	if flags.Verbose {
 		fmt.Println("got a response from API")

@@ -32,14 +32,15 @@ import (
 )
 
 var (
-	defaultEndpoint string = "https://www.ncbi.nlm.nih.gov/Traces/sdl/1/retrieve"
+	defaultEndpoint = "https://www.ncbi.nlm.nih.gov/Traces/sdl/1/retrieve"
 )
 
-func NewClient(url, loc string, ngc []byte, types map[string]bool) *Client {
+// NewClient creates a client with given parameters to communicate with the SDL API.
+func NewClient(url string, loc, ngc []byte, types map[string]bool) *Client {
 	if url == "" {
 		url = defaultEndpoint
 	}
-	if loc == "" {
+	if loc == nil {
 		return nil
 	}
 	return &Client{
@@ -55,21 +56,23 @@ func NewClient(url, loc string, ngc []byte, types map[string]bool) *Client {
 // to files in the SDL system.
 type Client struct {
 	url      string
-	location string
+	location []byte
 	types    map[string]bool
 	batch    int
 	ngc      []byte
 }
 
+// Retrieve Calls the retrieve endpoint on SDL with the list of accessions given.
 func (c *Client) Retrieve(accessions []string) ([]*fuseralib.Accession, error) {
 	return c.makeRequest(accessions, true)
 }
 
-func NewEagerClient(url, loc string, ngc []byte, types map[string]bool) *EagerClient {
+// NewEagerClient creates a client that has the SDL API sign urls ahead of time when retrieving data for accessions.
+func NewEagerClient(url string, loc, ngc []byte, types map[string]bool) *EagerClient {
 	if url == "" {
 		url = defaultEndpoint
 	}
-	if loc == "" {
+	if loc == nil {
 		return nil
 	}
 	return &EagerClient{
@@ -82,6 +85,9 @@ func NewEagerClient(url, loc string, ngc []byte, types map[string]bool) *EagerCl
 	}
 }
 
+// EagerClient A client that "eagerly" asks the API to go ahead and
+// create signed urls for all the files under all the accessions queried
+// through the retrieve endpoint.
 type EagerClient struct {
 	Client
 }
@@ -93,6 +99,7 @@ func (c *EagerClient) Retrieve(accessions []string) ([]*fuseralib.Accession, err
 }
 
 // Sign has the SDL API create signed urls for all files under the given accession.
+// TODO: Have sign update the client's token
 func (c *Client) Sign(accession string) (*fuseralib.Accession, error) {
 	accs, err := c.makeRequest([]string{accession}, false)
 	if err != nil {
@@ -105,9 +112,6 @@ func (c *Client) Sign(accession string) (*fuseralib.Accession, error) {
 }
 
 func (c *Client) makeRequest(accessions []string, meta bool) ([]*fuseralib.Accession, error) {
-	if accessions == nil {
-		return nil, errors.New("must provide accession(s) to pass to SDL API")
-	}
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 	writer, err := c.addParams(writer, accessions, meta)
@@ -227,8 +231,10 @@ func (c *Client) addParams(writer *multipart.Writer, accessions []string, meta b
 			return nil, err
 		}
 	}
-	if err := c.addAccessions(writer, accessions); err != nil {
-		return nil, err
+	if accessions != nil && len(accessions) > 0 {
+		if err := c.addAccessions(writer, accessions); err != nil {
+			return nil, err
+		}
 	}
 	if err := writer.Close(); err != nil {
 		return nil, errors.New("could not close multipart.Writer")
@@ -236,6 +242,7 @@ func (c *Client) addParams(writer *multipart.Writer, accessions []string, meta b
 	return writer, nil
 }
 
+// Payload The JSON response from SDL's retrieve endpoint.
 type Payload struct {
 	ID      string           `json:"accession,omitempty"`
 	Status  int              `json:"status,omitempty"`
@@ -282,7 +289,7 @@ func (c *Client) addAccessions(writer *multipart.Writer, accessions []string) er
 }
 
 func (c *Client) addLocation(writer *multipart.Writer) error {
-	if err := writer.WriteField("location", c.location); err != nil {
+	if err := writer.WriteField("location", string(c.location[:])); err != nil {
 		return errors.New("could not write location field to multipart.Writer")
 	}
 	return nil

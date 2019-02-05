@@ -92,10 +92,11 @@ func GetObjectRange(url, byteRange string) (*http.Response, error) {
 }
 
 type Client struct {
-	Bucket  string
-	Key     string
-	Region  string
-	Profile string
+	Bucket   string
+	Key      string
+	Region   string
+	Profile  string
+	Platform *Platform
 }
 
 func NewClient(bucket, key, region, profile string) Client {
@@ -176,6 +177,80 @@ func ResolveRegion() (string, error) {
 		}
 	}
 	return loc, nil
+}
+
+// Platform contains data that describes the cloud platform Fusera is running on.
+type Platform struct {
+	Name   string
+	Region []byte
+}
+
+// IsAWS returns true if the platform is AWS.
+func (p *Platform) IsAWS() bool {
+	return strings.HasPrefix(p.Name, "s3")
+}
+
+// IsGCP returns true if the platform is GCP.
+func (p *Platform) IsGCP() bool {
+	return strings.HasPrefix(p.Name, "gs")
+}
+
+// RetrieveLocation attempts to figure out which cloud
+// provider Fusera is running on and what region of that cloud.
+func RetrieveLocation() (*Platform, error) {
+	// Attempt to resolve the location on aws or gs.
+	p := &Platform{}
+	aws, err := resolveAwsRegion()
+	if err != nil {
+		// could be on google
+		// retain aws error message
+		msg := err.Error()
+		loc, err := retrieveGCPInstanceToken()
+		if err != nil {
+			// return both aws and google error messages
+			return nil, errors.Wrap(err, msg)
+		}
+		p.Region = loc
+		p.Name = "gs"
+	}
+	if p.Region == nil {
+		p.Region = []byte(aws)
+		p.Name = "s3"
+	}
+	return p, nil
+}
+
+func retrieveGCPInstanceToken() ([]byte, error) {
+	// make a request to token endpoint
+	client := &http.Client{
+		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   1 * time.Second,
+				KeepAlive: 1 * time.Second,
+				DualStack: true,
+			}).DialContext,
+			MaxIdleConns:          1000,
+			MaxIdleConnsPerHost:   1000,
+			IdleConnTimeout:       500 * time.Millisecond,
+			TLSHandshakeTimeout:   500 * time.Millisecond,
+			ExpectContinueTimeout: 500 * time.Millisecond,
+		},
+	}
+	req, err := http.NewRequest("GET", "http://metadata/computeMetadata/v1/instance/service-accounts/default/identity?audience=fusera&format=full", nil)
+	req.Header.Add("Metadata-Flavor", "Google")
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, errors.Wrapf(err, "location was not provided, fusera attempted to resolve region but encountered an error, this feature only works when fusera is on an amazon or google instance")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.Errorf("issue trying to retreive GCP instance token, got: %d: %s", resp.StatusCode, resp.Status)
+	}
+	token, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, errors.New("issue trying to resolve region, couldn't decode response from google")
+	}
+	return token, nil
 }
 
 func resolveAwsRegion() (string, error) {
