@@ -140,7 +140,7 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 	// Location takes longest if there's a failure, so validate it last.
 	var platform *awsutil.Platform
 	if flags.Location == "" {
-		platform, err = flags.RetrieveLocation()
+		platform, err = flags.FindLocation()
 		if err != nil {
 			twig.Debug(err)
 			fmt.Println(err)
@@ -154,10 +154,21 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 	var accessions []*fuseralib.Accession
 	var client fuseralib.API
 	var rootErr []byte
-	if flags.Eager {
-		client = sdl.NewEagerClient(flags.Endpoint, platform.Region, token, types)
+	var location string
+	if platform.IsGCP() {
+		location = string(platform.InstanceToken[:])
 	} else {
-		client = sdl.NewClient(flags.Endpoint, platform.Region, token, types)
+		location, err = flags.ResolveLocation()
+		if err != nil {
+			twig.Debug(err)
+			fmt.Println(err)
+			return errors.New("no location provided")
+		}
+	}
+	if flags.Eager {
+		client = sdl.NewEagerClient(flags.Endpoint, location, token, types)
+	} else {
+		client = sdl.NewClient(flags.Endpoint, location, token, types)
 	}
 	if flags.Verbose {
 		fmt.Printf("Communicating with SDL API at: %s\n", flags.Endpoint)
@@ -219,7 +230,7 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 	}
 	if platform.IsGCP() {
 		credProfile = flags.GcpProfile
-		client = sdl.NewGCPClient(flags.Endpoint, platform.Region)
+		client = sdl.NewGCPClient(flags.Endpoint, token, types)
 	}
 	opt := &fuseralib.Options{
 		API:      client,

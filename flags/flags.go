@@ -56,17 +56,17 @@ var (
 // ResolveLocation attempts to resolve the location on GCP and AWS.
 // If location cannot be resolved, return error.
 func ResolveLocation() (string, error) {
-	loc, err := awsutil.ResolveRegion()
+	loc, err := awsutil.ResolveTraditionalLocation()
 	if err != nil {
 		return "", err
 	}
 	return loc, nil
 }
 
-// RetrieveLocation attempts to resolve the location on GCP and AWS.
+// FindLocation attempts to resolve the location on GCP and AWS.
 // If location cannot be resolved, return error.
-func RetrieveLocation() (*awsutil.Platform, error) {
-	p, err := awsutil.RetrieveLocation()
+func FindLocation() (*awsutil.Platform, error) {
+	p, err := awsutil.FindLocation()
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +74,7 @@ func RetrieveLocation() (*awsutil.Platform, error) {
 	return p, nil
 }
 
-// If a list of comma separated accessions was provided, use it.
+// ResolveAccession If a list of comma separated accessions was provided, use it.
 // Otherwise, if a path to a cart file was given, deduce whether it's on s3 or local.
 // Either way, attempt to read the file and make a map of unique accessions.
 func ResolveAccession(acc string) ([]string, error) {

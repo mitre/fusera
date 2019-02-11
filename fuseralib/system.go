@@ -139,7 +139,6 @@ func NewFusera(ctx context.Context, opt *Options) (*Fusera, error) {
 				file.ReqPays = true
 				file.Bucket = f.Bucket
 				file.Key = f.Key
-				file.Region = f.Region
 				file.Platform = opt.Platform
 			}
 			file.Acc = acc.ID

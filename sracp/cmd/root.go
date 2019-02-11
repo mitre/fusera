@@ -123,7 +123,7 @@ var rootCmd = &cobra.Command{
 		// Location takes longest if there's a failure, so validate it last.
 		var platform *awsutil.Platform
 		if location == "" {
-			platform, err = flags.RetrieveLocation()
+			platform, err = flags.FindLocation()
 			if err != nil {
 				twig.Debug(err)
 				return errors.New("no location: a location was not provided so sracp attempted to resolve the location itself, this feature is only supported when sracp is running on Amazon or Google's cloud platforms")

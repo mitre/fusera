@@ -38,11 +38,11 @@ var (
 )
 
 // NewClient creates a client with given parameters to communicate with the SDL API.
-func NewClient(url string, loc, ngc []byte, types map[string]bool) *Client {
+func NewClient(url, loc string, ngc []byte, types map[string]bool) *Client {
 	if url == "" {
 		url = defaultEndpoint
 	}
-	if loc == nil {
+	if loc == "" {
 		return nil
 	}
 	return &Client{
@@ -58,7 +58,7 @@ func NewClient(url string, loc, ngc []byte, types map[string]bool) *Client {
 // to files in the SDL system.
 type Client struct {
 	url      string
-	location []byte
+	location string
 	types    map[string]bool
 	batch    int
 	ngc      []byte
@@ -134,11 +134,11 @@ func (c *Client) makeRequest(accessions []string, meta bool) ([]*fuseralib.Acces
 }
 
 // NewEagerClient creates a client that has the SDL API sign urls ahead of time when retrieving data for accessions.
-func NewEagerClient(url string, loc, ngc []byte, types map[string]bool) *EagerClient {
+func NewEagerClient(url, loc string, ngc []byte, types map[string]bool) *EagerClient {
 	if url == "" {
 		url = defaultEndpoint
 	}
-	if loc == nil {
+	if loc == "" {
 		return nil
 	}
 	return &EagerClient{
@@ -165,14 +165,15 @@ func (c *EagerClient) Retrieve(accessions []string) ([]*fuseralib.Accession, err
 }
 
 // NewGCPClient creates a client that has the SDL API sign urls ahead of time when retrieving data for accessions.
-func NewGCPClient(url string, ngc []byte) *GCPClient {
+func NewGCPClient(url string, ngc []byte, types map[string]bool) *GCPClient {
 	if url == "" {
 		url = defaultEndpoint
 	}
 	return &GCPClient{
 		Client: Client{
-			url: url,
-			ngc: ngc,
+			url:   url,
+			ngc:   ngc,
+			types: types,
 		},
 	}
 }
@@ -185,11 +186,11 @@ type GCPClient struct {
 // Sign gets a signed url for a file in a Google cloud region.
 func (c *GCPClient) Sign(accession string) (*fuseralib.Accession, error) {
 	// Get an instance token, set it to location.
-	platform, err := awsutil.RetrieveLocation()
+	platform, err := awsutil.FindLocation()
 	if err != nil {
 		return nil, errors.New("Could not refresh GCP instance token for sdl location")
 	}
-	c.location = platform.Region
+	c.location = string(platform.InstanceToken[:])
 	// Then call makeRequest
 	accs, err := c.makeRequest([]string{accession}, false)
 	if err != nil {
@@ -327,7 +328,7 @@ func (c *Client) addAccessions(writer *multipart.Writer, accessions []string) er
 }
 
 func (c *Client) addLocation(writer *multipart.Writer) error {
-	if err := writer.WriteField("location", string(c.location[:])); err != nil {
+	if err := writer.WriteField("location", c.location); err != nil {
 		return errors.New("could not write location field to multipart.Writer")
 	}
 	return nil

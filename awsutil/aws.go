@@ -163,60 +163,80 @@ func ReadFile(path string) ([]byte, error) {
 	return bytes, err
 }
 
-func ResolveRegion() (string, error) {
-	// Attempt to resolve the location on aws or gs.
-	loc, err := resolveAwsRegion()
+// ResolveTraditionalLocation Forms the traditional location string.
+func ResolveTraditionalLocation() (string, error) {
+	platform, err := ResolveRegion()
+	if err != nil {
+		return "", err
+	}
+	return platform.Name + "." + platform.Region, nil
+}
+
+// ResolveRegion Attempt to resolve the location on aws or gs.
+func ResolveRegion() (*Platform, error) {
+	platform := &Platform{}
+	region, err := resolveAwsRegion()
 	if err != nil {
 		// could be on google
 		// retain aws error message
 		msg := err.Error()
-		loc, err = resolveGcpZone()
+		region, err = resolveGcpZone()
 		if err != nil {
 			// return both aws and google error messages
-			return "", errors.Wrap(err, msg)
+			return nil, errors.Wrap(err, msg)
 		}
+		platform.Name = "gs"
+		platform.Region = region
+		return platform, nil
 	}
-	return loc, nil
+	platform.Name = "s3"
+	platform.Region = region
+	return platform, nil
 }
 
 // Platform contains data that describes the cloud platform Fusera is running on.
 type Platform struct {
-	Name   string
-	Region []byte
+	Name          string
+	Region        string
+	InstanceToken []byte
 }
 
 // IsAWS returns true if the platform is AWS.
 func (p *Platform) IsAWS() bool {
-	return strings.HasPrefix(p.Name, "s3")
+	return p.Name == "s3"
 }
 
 // IsGCP returns true if the platform is GCP.
 func (p *Platform) IsGCP() bool {
-	return strings.HasPrefix(p.Name, "gs")
+	return p.Name == "gs"
 }
 
-// RetrieveLocation attempts to figure out which cloud
+// FindLocation attempts to figure out which cloud
 // provider Fusera is running on and what region of that cloud.
-func RetrieveLocation() (*Platform, error) {
-	// Attempt to resolve the location on aws or gs.
+func FindLocation() (*Platform, error) {
 	p := &Platform{}
 	aws, err := resolveAwsRegion()
 	if err != nil {
 		// could be on google
 		// retain aws error message
 		msg := err.Error()
-		loc, err := retrieveGCPInstanceToken()
+		token, err := retrieveGCPInstanceToken()
 		if err != nil {
 			// return both aws and google error messages
 			return nil, errors.Wrap(err, msg)
 		}
-		p.Region = loc
+		zone, err := resolveGcpZone()
+		if err != nil {
+			// return both aws and google error messages
+			return nil, errors.Wrap(err, msg)
+		}
 		p.Name = "gs"
+		p.Region = zone
+		p.InstanceToken = token
+		return p, nil
 	}
-	if p.Region == nil {
-		p.Region = []byte(aws)
-		p.Name = "s3"
-	}
+	p.Name = "s3"
+	p.Region = aws
 	return p, nil
 }
 
@@ -289,7 +309,7 @@ func resolveAwsRegion() (string, error) {
 	if payload.Region == "" {
 		return "", errors.New("issue trying to resolve region, amazon returned empty region")
 	}
-	return "s3." + payload.Region, nil
+	return payload.Region, nil
 }
 
 func resolveGcpZone() (string, error) {
@@ -326,7 +346,7 @@ func resolveGcpZone() (string, error) {
 	if path == "" || len(path) == 1 {
 		return "", errors.New("issue trying to resolve region, google returned empty region")
 	}
-	return "gs." + path, nil
+	return path, nil
 }
 
 func newHTTPClient() *http.Client {

@@ -256,7 +256,7 @@ func (fh *FileHandle) readFromStream(offset int64, buf []byte) (bytesRead int, e
 			sd, _ := time.ParseDuration("30s")
 			exp := fh.inode.Attributes.ExpirationDate
 			if fh.inode.ReqPays {
-				client := awsutil.NewClient(fh.inode.Bucket, fh.inode.Key, fh.inode.Region, fh.inode.fs.opt.Profile)
+				client := awsutil.NewClient(fh.inode.Bucket, fh.inode.Key, fh.inode.Platform.Region, fh.inode.fs.opt.Profile)
 				body, err := client.GetObjectRange(byteRange)
 				if err != nil {
 					return 0, syscall.EACCES
