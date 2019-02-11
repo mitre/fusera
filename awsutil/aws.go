@@ -237,7 +237,7 @@ func retrieveGCPInstanceToken() ([]byte, error) {
 			ExpectContinueTimeout: 500 * time.Millisecond,
 		},
 	}
-	req, err := http.NewRequest("GET", "http://metadata/computeMetadata/v1/instance/service-accounts/default/identity?audience=fusera&format=full", nil)
+	req, err := http.NewRequest("GET", "http://metadata/computeMetadata/v1/instance/service-accounts/default/identity?audience=https://www.ncbi.nlm.nih.gov&format=full", nil)
 	req.Header.Add("Metadata-Flavor", "Google")
 	resp, err := client.Do(req)
 	if err != nil {
