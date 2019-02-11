@@ -31,4 +31,5 @@ type File struct {
 	Bucket         string    `json:"bucket,omitempty"`
 	Key            string    `json:"key,omitempty"`
 	Service        string    `json:"service,omitempty"`
+	Region         string    `json:"region,omitempty"`
 }

@@ -256,7 +256,7 @@ func (fh *FileHandle) readFromStream(offset int64, buf []byte) (bytesRead int, e
 			sd, _ := time.ParseDuration("30s")
 			exp := fh.inode.Attributes.ExpirationDate
 			if fh.inode.ReqPays {
-				client := awsutil.NewClient(fh.inode.Bucket, fh.inode.Key, fh.inode.Region, fh.inode.fs.opt.Profile)
+				client := awsutil.NewClient(fh.inode.Bucket, fh.inode.Key, fh.inode.Platform.Region, fh.inode.fs.opt.Profile)
 				body, err := client.GetObjectRange(byteRange)
 				if err != nil {
 					return 0, syscall.EACCES
@@ -323,10 +323,11 @@ func (fh *FileHandle) readFromStream(offset int64, buf []byte) (bytesRead int, e
 	return
 }
 
+// TODO: If on GCP, we now need to get a new instance token everytime we want a new url
 func newURL(inode *Inode) (string, time.Time, error) {
 	accession, err := inode.fs.signer.Sign(inode.Acc)
 	if err != nil {
-		return "", time.Now(), errors.Wrapf(err, "issue contacting API while trying to renew signed url for:\naccession: %s\nfile: %s\n", inode.Acc, inode.Name)
+		return "", time.Now(), errors.Wrapf(err, "issue contacting API while trying to renew signed url for:\naccession: %s\nfile: %s\n", inode.Acc, *inode.Name)
 	}
 	if flags.Verbose {
 		fmt.Println("got a response from API")

@@ -25,6 +25,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mitre/fusera/awsutil"
 	"github.com/mitre/fusera/fuseralib"
 	"github.com/mitre/fusera/sdl"
 
@@ -41,7 +42,7 @@ var (
 
 	location  string
 	accession string
-	ngcpath   string
+	tokenpath string
 	filetype  string
 
 	endpoint             string
@@ -65,9 +66,9 @@ func init() {
 		panic("INTERNAL ERROR: could not bind accession flag to accession environment variable")
 	}
 
-	rootCmd.Flags().StringVarP(&ngcpath, "ngc", "n", "", flags.NgcMsg)
-	if err := viper.BindPFlag("ngc", rootCmd.Flags().Lookup("ngc")); err != nil {
-		panic("INTERNAL ERROR: could not bind ngc flag to ngc environment variable")
+	rootCmd.Flags().StringVarP(&tokenpath, "token", "t", "", flags.TokenMsg)
+	if err := viper.BindPFlag("token", rootCmd.Flags().Lookup("token")); err != nil {
+		panic("INTERNAL ERROR: could not bind token flag to token environment variable")
 	}
 
 	rootCmd.Flags().StringVarP(&filetype, "filetype", "f", "", flags.FiletypeMsg)
@@ -103,25 +104,26 @@ var rootCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) (err error) {
 		setConfig()
 		foldEnvVarsIntoFlagValues()
-		var ngc []byte
-		if ngcpath != "" {
-			ngc, err = flags.ResolveNgcFile(ngcpath)
+		var token []byte
+		if tokenpath != "" {
+			token, err = flags.ResolveNgcFile(tokenpath)
 			if err != nil {
 				return err
 			}
 		}
-		if accession == "" {
-			return errors.New("no accessions provided: sracp needs a list of accessions in order to know what files to copy")
-		}
 		// Now resolveAccession's value
-		accs, err := flags.ResolveAccession(accession)
-		if err != nil {
-			return err
+		var accs []string
+		if accession != "" {
+			accs, err = flags.ResolveAccession(accession)
+			if err != nil {
+				return err
+			}
 		}
 
 		// Location takes longest if there's a failure, so validate it last.
+		var platform *awsutil.Platform
 		if location == "" {
-			location, err = flags.ResolveLocation()
+			platform, err = flags.FindLocation()
 			if err != nil {
 				twig.Debug(err)
 				return errors.New("no location: a location was not provided so sracp attempted to resolve the location itself, this feature is only supported when sracp is running on Amazon or Google's cloud platforms")
@@ -135,30 +137,39 @@ var rootCmd = &cobra.Command{
 			}
 		}
 		path := args[0]
-		batch := flags.ResolveBatch(location, awsBatch, gcpBatch)
-		client := sdl.NewEagerClient(endpoint, location, ngc, types)
+		batch := flags.ResolveBatch(platform.Name, awsBatch, gcpBatch)
+		client := sdl.NewEagerClient(endpoint, platform.Region, token, types)
 		var accessions []*fuseralib.Accession
-		dot := batch
-		i := 0
-		for dot < len(accs) {
-			aa, err := client.Retrieve(accs[i:dot])
+		if accs == nil || len(accs) == 0 {
+			aa, err := client.Retrieve(nil)
 			if err != nil {
 				fmt.Println(err.Error())
-				fmt.Println("List of accessions that failed in this batch:")
-				fmt.Println(accs[i:dot])
 			} else {
 				accessions = append(accessions, aa...)
 			}
-			i = dot
-			dot += batch
-		}
-		aa, err := client.Retrieve(accs[i:])
-		if err != nil {
-			fmt.Println(err.Error())
-			fmt.Println("List of accessions that failed in this batch:")
-			fmt.Println(accs[i:])
 		} else {
-			accessions = append(accessions, aa...)
+			dot := batch
+			i := 0
+			for dot < len(accs) {
+				aa, err := client.Retrieve(accs[i:dot])
+				if err != nil {
+					fmt.Println(err.Error())
+					fmt.Println("List of accessions that failed in this batch:")
+					fmt.Println(accs[i:dot])
+				} else {
+					accessions = append(accessions, aa...)
+				}
+				i = dot
+				dot += batch
+			}
+			aa, err := client.Retrieve(accs[i:])
+			if err != nil {
+				fmt.Println(err.Error())
+				fmt.Println("List of accessions that failed in this batch:")
+				fmt.Println(accs[i:])
+			} else {
+				accessions = append(accessions, aa...)
+			}
 		}
 
 		for _, a := range accessions {
@@ -267,7 +278,7 @@ func foldEnvVarsIntoFlagValues() {
 	flags.ResolveInt("gcp-batch", &gcpBatch)
 	flags.ResolveString("location", &location)
 	flags.ResolveString("accession", &accession)
-	flags.ResolveString("ngc", &ngcpath)
+	flags.ResolveString("token", &tokenpath)
 	flags.ResolveString("filetype", &filetype)
 }
 

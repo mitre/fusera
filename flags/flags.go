@@ -17,7 +17,7 @@ var (
 
 	LocationName  = "location"
 	AccessionName = "accession"
-	NgcName       = "ngc"
+	TokenName     = "token"
 	FiletypeName  = "filetype"
 	EndpointName  = "endpoint"
 	AwsBatchName  = "aws-batch"
@@ -30,7 +30,7 @@ var (
 
 	Location  string
 	Accession string
-	Ngcpath   string
+	Tokenpath string
 	Filetype  string
 
 	Endpoint                      string
@@ -42,7 +42,7 @@ var (
 
 	LocationMsg   = "Cloud provider and region where files should be located.\nFORMAT: [cloud.region]\nEXAMPLES: [s3.us-east-1 | gs.US]\nNOTE: This can be auto-resolved if running on AWS or GCP.\nEnvironment Variable: [$DBGAP_LOCATION]"
 	AccessionMsg  = "A list of accessions to mount or path to accession file.\nEXAMPLES: [\"SRR123,SRR456\" | local/accession/file | https://<bucket>.<region>.s3.amazonaws.com/<accession/file>]\nNOTE: If using an s3 url, the proper aws credentials need to be in place on the machine.\nEnvironment Variable: [$DBGAP_ACCESSION]"
-	NgcMsg        = "A path to an ngc file used to authorize access to accessions in dbGaP.\nEXAMPLES: [local/ngc/file | https://<bucket>.<region>.s3.amazonaws.com/<ngc/file>]\nNOTE: If using an s3 url, the proper aws credentials need to be in place on the machine.\nEnvironment Variable: [$DBGAP_NGC]"
+	TokenMsg      = "A path to one of the various security tokens used to authorize access to accessions in dbGaP.\nEXAMPLES: [local/token/file | https://<bucket>.<region>.s3.amazonaws.com/<token/file>]\nNOTE: If using an s3 url, the proper aws credentials need to be in place on the machine.\nEnvironment Variable: [$DBGAP_TOKEN]"
 	FiletypeMsg   = "A list of the only file types to copy.\nEXAMPLES: \"cram,crai,bam,bai\"\nEnvironment Variable: [$DBGAP_FILETYPE]"
 	EndpointMsg   = "ADVANCED: Change the endpoint used to communicate with SDL API.\nEnvironment Variable: [$DBGAP_ENDPOINT]"
 	AwsBatchMsg   = "ADVANCED: Adjust the amount of accessions put in one request to the SDL API when using an AWS location.\nEnvironment Variable: [$DBGAP_AWS-BATCH]"
@@ -56,14 +56,25 @@ var (
 // ResolveLocation attempts to resolve the location on GCP and AWS.
 // If location cannot be resolved, return error.
 func ResolveLocation() (string, error) {
-	loc, err := awsutil.ResolveRegion()
+	loc, err := awsutil.ResolveTraditionalLocation()
 	if err != nil {
 		return "", err
 	}
 	return loc, nil
 }
 
-// If a list of comma separated accessions was provided, use it.
+// FindLocation attempts to resolve the location on GCP and AWS.
+// If location cannot be resolved, return error.
+func FindLocation() (*awsutil.Platform, error) {
+	p, err := awsutil.FindLocation()
+	if err != nil {
+		return nil, err
+	}
+	// We still need region information to make requests
+	return p, nil
+}
+
+// ResolveAccession If a list of comma separated accessions was provided, use it.
 // Otherwise, if a path to a cart file was given, deduce whether it's on s3 or local.
 // Either way, attempt to read the file and make a map of unique accessions.
 func ResolveAccession(acc string) ([]string, error) {
@@ -110,17 +121,17 @@ func parseAccessions(r rune) bool {
 
 // Deduce whether path is on s3 or local.
 // Either way, read all of the file into a byte slice.
-func ResolveNgcFile(ngcpath string) (data []byte, err error) {
-	if strings.HasPrefix(ngcpath, "http") {
+func ResolveNgcFile(tokenpath string) (data []byte, err error) {
+	if strings.HasPrefix(tokenpath, "http") {
 		// we were given a url on s3.
-		data, err = awsutil.ReadFile(ngcpath)
+		data, err = awsutil.ReadFile(tokenpath)
 		if err != nil {
-			return nil, errors.Wrapf(err, "couldn't open ngc file at: %s", ngcpath)
+			return nil, errors.Wrapf(err, "couldn't open token at: %s", tokenpath)
 		}
 	} else {
-		data, err = ioutil.ReadFile(ngcpath)
+		data, err = ioutil.ReadFile(tokenpath)
 		if err != nil {
-			return nil, errors.Wrapf(err, "couldn't open ngc file at: %s", ngcpath)
+			return nil, errors.Wrapf(err, "couldn't open token at: %s", tokenpath)
 		}
 	}
 	return
