@@ -214,11 +214,12 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 		os.Exit(1)
 	}
 	credProfile := ""
-	if platform.Name == "s3" {
+	if platform.IsAWS() {
 		credProfile = flags.AwsProfile
 	}
-	if platform.Name == "gs" {
+	if platform.IsGCP() {
 		credProfile = flags.GcpProfile
+		client = sdl.NewGCPClient(flags.Endpoint, platform.Region)
 	}
 	opt := &fuseralib.Options{
 		API:      client,

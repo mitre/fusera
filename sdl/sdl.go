@@ -26,6 +26,8 @@ import (
 	"net/http/httputil"
 	"strings"
 
+	"github.com/mitre/fusera/awsutil"
+
 	"github.com/mitre/fusera/flags"
 	"github.com/mitre/fusera/fuseralib"
 	"github.com/pkg/errors"
@@ -67,39 +69,7 @@ func (c *Client) Retrieve(accessions []string) ([]*fuseralib.Accession, error) {
 	return c.makeRequest(accessions, true)
 }
 
-// NewEagerClient creates a client that has the SDL API sign urls ahead of time when retrieving data for accessions.
-func NewEagerClient(url string, loc, ngc []byte, types map[string]bool) *EagerClient {
-	if url == "" {
-		url = defaultEndpoint
-	}
-	if loc == nil {
-		return nil
-	}
-	return &EagerClient{
-		Client: Client{
-			url:      url,
-			location: loc,
-			types:    types,
-			ngc:      ngc,
-		},
-	}
-}
-
-// EagerClient A client that "eagerly" asks the API to go ahead and
-// create signed urls for all the files under all the accessions queried
-// through the retrieve endpoint.
-type EagerClient struct {
-	Client
-}
-
-// Retrieve has the SDL API return meta information for all files under the given accessions.
-// accessions: the accessions to get metadata for.
-func (c *EagerClient) Retrieve(accessions []string) ([]*fuseralib.Accession, error) {
-	return c.makeRequest(accessions, false)
-}
-
 // Sign has the SDL API create signed urls for all files under the given accession.
-// TODO: Have sign update the client's token
 func (c *Client) Sign(accession string) (*fuseralib.Accession, error) {
 	accs, err := c.makeRequest([]string{accession}, false)
 	if err != nil {
@@ -161,6 +131,74 @@ func (c *Client) makeRequest(accessions []string, meta bool) ([]*fuseralib.Acces
 	}
 
 	return sanitize(payload)
+}
+
+// NewEagerClient creates a client that has the SDL API sign urls ahead of time when retrieving data for accessions.
+func NewEagerClient(url string, loc, ngc []byte, types map[string]bool) *EagerClient {
+	if url == "" {
+		url = defaultEndpoint
+	}
+	if loc == nil {
+		return nil
+	}
+	return &EagerClient{
+		Client: Client{
+			url:      url,
+			location: loc,
+			types:    types,
+			ngc:      ngc,
+		},
+	}
+}
+
+// EagerClient A client that "eagerly" asks the API to go ahead and
+// create signed urls for all the files under all the accessions queried
+// through the retrieve endpoint.
+type EagerClient struct {
+	Client
+}
+
+// Retrieve has the SDL API return meta information for all files under the given accessions.
+// accessions: the accessions to get metadata for.
+func (c *EagerClient) Retrieve(accessions []string) ([]*fuseralib.Accession, error) {
+	return c.makeRequest(accessions, false)
+}
+
+// NewGCPClient creates a client that has the SDL API sign urls ahead of time when retrieving data for accessions.
+func NewGCPClient(url string, ngc []byte) *GCPClient {
+	if url == "" {
+		url = defaultEndpoint
+	}
+	return &GCPClient{
+		Client: Client{
+			url: url,
+			ngc: ngc,
+		},
+	}
+}
+
+// GCPClient handles setting the parameters properly for when Google is the cloud platform.
+type GCPClient struct {
+	Client
+}
+
+// Sign gets a signed url for a file in a Google cloud region.
+func (c *GCPClient) Sign(accession string) (*fuseralib.Accession, error) {
+	// Get an instance token, set it to location.
+	platform, err := awsutil.RetrieveLocation()
+	if err != nil {
+		return nil, errors.New("Could not refresh GCP instance token for sdl location")
+	}
+	c.location = platform.Region
+	// Then call makeRequest
+	accs, err := c.makeRequest([]string{accession}, false)
+	if err != nil {
+		return nil, err
+	}
+	if len(accs) != 1 {
+		return nil, errors.New("SDL API returned more accessions than requested")
+	}
+	return accs[0], nil
 }
 
 func sanitize(payload []Payload) ([]*fuseralib.Accession, error) {
