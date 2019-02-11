@@ -191,15 +191,16 @@ func (c *GCPClient) Sign(accession string) (*fuseralib.Accession, error) {
 		return nil, errors.New("Could not refresh GCP instance token for sdl location")
 	}
 	c.location = string(platform.InstanceToken[:])
-	// Then call makeRequest
 	accs, err := c.makeRequest([]string{accession}, false)
 	if err != nil {
 		return nil, err
 	}
-	if len(accs) != 1 {
-		return nil, errors.New("SDL API returned more accessions than requested")
+	for _, a := range accs {
+		if a.ID == accession {
+			return a, nil
+		}
 	}
-	return accs[0], nil
+	return nil, errors.New("SDL API did not return requested accession")
 }
 
 func sanitize(payload []Payload) ([]*fuseralib.Accession, error) {
