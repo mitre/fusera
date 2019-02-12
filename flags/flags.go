@@ -17,6 +17,7 @@ var (
 
 	LocationName  = "location"
 	AccessionName = "accession"
+	NgcName       = "ngc"
 	TokenName     = "token"
 	FiletypeName  = "filetype"
 	EndpointName  = "endpoint"
@@ -30,6 +31,7 @@ var (
 
 	Location  string
 	Accession string
+	NgcPath   string
 	Tokenpath string
 	Filetype  string
 
@@ -42,6 +44,7 @@ var (
 
 	LocationMsg   = "Cloud provider and region where files should be located.\nFORMAT: [cloud.region]\nEXAMPLES: [s3.us-east-1 | gs.US]\nNOTE: This can be auto-resolved if running on AWS or GCP.\nEnvironment Variable: [$DBGAP_LOCATION]"
 	AccessionMsg  = "A list of accessions to mount or path to accession file.\nEXAMPLES: [\"SRR123,SRR456\" | local/accession/file | https://<bucket>.<region>.s3.amazonaws.com/<accession/file>]\nNOTE: If using an s3 url, the proper aws credentials need to be in place on the machine.\nEnvironment Variable: [$DBGAP_ACCESSION]"
+	NgcMsg        = "A path to an ngc file used to authorize access to accessions in dbGaP. If used in tandem with token, the token takes precedence.\nEXAMPLES: [local/ngc/file | https://<bucket>.<region>.s3.amazonaws.com/<ngc/file>]\nNOTE: If using an s3 url, the proper aws credentials need to be in place on the machine.\nEnvironment Variable: [$DBGAP_NGC]"
 	TokenMsg      = "A path to one of the various security tokens used to authorize access to accessions in dbGaP.\nEXAMPLES: [local/token/file | https://<bucket>.<region>.s3.amazonaws.com/<token/file>]\nNOTE: If using an s3 url, the proper aws credentials need to be in place on the machine.\nEnvironment Variable: [$DBGAP_TOKEN]"
 	FiletypeMsg   = "A list of the only file types to copy.\nEXAMPLES: \"cram,crai,bam,bai\"\nEnvironment Variable: [$DBGAP_FILETYPE]"
 	EndpointMsg   = "ADVANCED: Change the endpoint used to communicate with SDL API.\nEnvironment Variable: [$DBGAP_ENDPOINT]"

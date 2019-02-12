@@ -53,6 +53,11 @@ func init() {
 		panic("INTERNAL ERROR: could not bind token flag to token environment variable")
 	}
 
+	mountCmd.Flags().StringVarP(&flags.NgcPath, "ngc", "n", "", flags.NgcMsg)
+	if err := viper.BindPFlag("ngc", mountCmd.Flags().Lookup("ngc")); err != nil {
+		panic("INTERNAL ERROR: could not bind ngc flag to ngc environment variable")
+	}
+
 	mountCmd.Flags().StringVarP(&flags.Filetype, "filetype", "f", "", flags.FiletypeMsg)
 	if err := viper.BindPFlag("filetype", mountCmd.Flags().Lookup("filetype")); err != nil {
 		panic("INTERNAL ERROR: could not bind filetype flag to filetype environment variable")
@@ -103,9 +108,10 @@ var mountCmd = &cobra.Command{
 func mount(cmd *cobra.Command, args []string) (err error) {
 	setConfig()
 	foldEnvVarsIntoFlagValues()
+	tokenpath := foldNgcIntoToken(flags.Tokenpath, flags.NgcPath)
 	var token []byte
-	if flags.Tokenpath != "" {
-		token, err = flags.ResolveNgcFile(flags.Tokenpath)
+	if tokenpath != "" {
+		token, err = flags.ResolveNgcFile(tokenpath)
 		if err != nil {
 			return err
 		}
@@ -282,7 +288,15 @@ func foldEnvVarsIntoFlagValues() {
 	flags.ResolveString("location", &flags.Location)
 	flags.ResolveString("accession", &flags.Accession)
 	flags.ResolveString("token", &flags.Tokenpath)
+	flags.ResolveString("ngc", &flags.NgcPath)
 	flags.ResolveString("filetype", &flags.Filetype)
+}
+
+func foldNgcIntoToken(token, ngc string) string {
+	if ngc != "" && token == "" {
+		return ngc
+	}
+	return token
 }
 
 func myUserAndGroup() (int, int) {
