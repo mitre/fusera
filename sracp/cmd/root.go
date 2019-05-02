@@ -97,9 +97,9 @@ func init() {
 
 var rootCmd = &cobra.Command{
 	Use:     "sracp",
-	Short:   "",
+	Short:   "A tool similar to cp that allows a user to download accessions - " + flags.Version,
 	Long:    ``,
-	Version: version,
+	Version: flags.Version,
 	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) (err error) {
 		setConfig()
