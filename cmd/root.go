@@ -52,9 +52,9 @@ func init() {
 
 var rootCmd = &cobra.Command{
 	Use:     "fusera",
-	Short:   "A FUSE interface to the NCBI Sequence Read Archive (SRA)",
+	Short:   "A FUSE interface to the NCBI Sequence Read Archive (SRA) - " + flags.Version,
 	Long:    ``,
-	Version: version,
+	Version: flags.Version,
 }
 
 // Execute runs the main command of fusera, which has no action of its own,
