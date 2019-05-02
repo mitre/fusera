@@ -211,6 +211,27 @@ func (p *Platform) IsGCP() bool {
 	return p.Name == "gs"
 }
 
+// NewManualPlatform creates a plaftorm from a manually set location
+func NewManualPlatform(location string) (*Platform, error) {
+	ss := strings.Split(location, ".")
+	if len(ss) != 2 {
+		return nil, errors.New("location given contained more than one \".\" which means it cannot be parsed according to expected cloud.region")
+	}
+	var cloud, region string = ss[0], ss[1]
+	return &Platform{Name: cloud, Region: region}, nil
+}
+
+// NewAwsPlatform creates a plaftorm with s3 as the Name and takes an AWS
+// region.
+func NewAwsPlatform(region string) *Platform {
+	return &Platform{Name: "s3", Region: region}
+}
+
+// NewGcpPlatform creates a platform with gs as the Name and takes a GCP zone.
+func NewGcpPlatform(region string) *Platform {
+	return &Platform{Name: "gs", Region: region}
+}
+
 // FindLocation attempts to figure out which cloud
 // provider Fusera is running on and what region of that cloud.
 func FindLocation() (*Platform, error) {

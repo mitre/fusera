@@ -128,6 +128,13 @@ var rootCmd = &cobra.Command{
 				twig.Debug(err)
 				return errors.New("no location: a location was not provided so sracp attempted to resolve the location itself, this feature is only supported when sracp is running on Amazon or Google's cloud platforms")
 			}
+		} else {
+			platform, err = awsutil.NewManualPlatform(flags.Location)
+			if err != nil {
+				twig.Debug(err)
+				fmt.Println(err)
+				return err
+			}
 		}
 		var types map[string]bool
 		if filetype != "" {

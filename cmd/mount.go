@@ -152,6 +152,13 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 			fmt.Println(err)
 			return errors.New("no location provided")
 		}
+	} else {
+		platform, err = awsutil.NewManualPlatform(flags.Location)
+		if err != nil {
+			twig.Debug(err)
+			fmt.Println(err)
+			return err
+		}
 	}
 
 	uid, gid := myUserAndGroup()
