@@ -123,19 +123,23 @@ var rootCmd = &cobra.Command{
 		// Location takes longest if there's a failure, so validate it last.
 		var platform *awsutil.Platform
 		if location == "" {
+			twig.Debug("Location is empty, attempting to resolve location")
 			platform, err = flags.FindLocation()
 			if err != nil {
 				twig.Debug(err)
 				return errors.New("no location: a location was not provided so sracp attempted to resolve the location itself, this feature is only supported when sracp is running on Amazon or Google's cloud platforms")
 			}
 		} else {
-			platform, err = awsutil.NewManualPlatform(flags.Location)
+			twig.Debug("Location was manually set")
+			platform, err = awsutil.NewManualPlatform(location)
 			if err != nil {
 				twig.Debug(err)
 				fmt.Println(err)
 				return err
 			}
 		}
+		twig.Debugf("Platform: %v", platform)
+
 		var types map[string]bool
 		if filetype != "" {
 			types, err = flags.ResolveFileType(filetype)
@@ -145,8 +149,29 @@ var rootCmd = &cobra.Command{
 		}
 		path := args[0]
 		batch := flags.ResolveBatch(platform.Name, awsBatch, gcpBatch)
-		client := sdl.NewEagerClient(endpoint, platform.Region, token, types)
+
 		var accessions []*fuseralib.Accession
+		var location string
+		if platform.IsGCP() {
+			location = string(platform.InstanceToken[:])
+		} else {
+			location, err = flags.ResolveLocation()
+			if err != nil {
+				twig.Debug(err)
+				fmt.Println(err)
+				return errors.New("no location provided")
+			}
+		}
+		client := sdl.NewEagerClient(endpoint, location, token, types)
+		if debug {
+			fmt.Printf("Communicating with SDL API at: %s\n", endpoint)
+			fmt.Printf("Using token at: %s\n", tokenpath)
+			fmt.Printf("Contents of token: %s\n", string(token[:]))
+			fmt.Printf("Limiting file types to: %v\n", types)
+			fmt.Printf("Giving cloud platform as: %s\n", string(platform.Name))
+			fmt.Printf("Giving region as: %s\n", string(platform.Region[:]))
+			fmt.Printf("Requesting accessions in batches of: %d\n", batch)
+		}
 		if accs == nil || len(accs) == 0 {
 			aa, err := client.Retrieve(nil)
 			if err != nil {
