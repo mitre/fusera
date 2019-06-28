@@ -93,6 +93,7 @@ func (c *Client) makeRequest(accessions []string, meta bool) ([]*fuseralib.Acces
 	if err != nil {
 		return nil, errors.New("can't create request to SDL API")
 	}
+	req.Header.Set("User-Agent", flags.BinaryName+"-"+flags.Version)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	if flags.Verbose {
 		reqdump, err := httputil.DumpRequestOut(req, true)

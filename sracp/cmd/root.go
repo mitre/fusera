@@ -93,10 +93,12 @@ func init() {
 
 	viper.SetEnvPrefix("dbgap")
 	viper.AutomaticEnv()
+
+	flags.BinaryName = "sracp"
 }
 
 var rootCmd = &cobra.Command{
-	Use:     "sracp",
+	Use:     flags.BinaryName,
 	Short:   "A tool similar to cp that allows a user to download accessions - " + flags.Version,
 	Long:    ``,
 	Version: flags.Version,
