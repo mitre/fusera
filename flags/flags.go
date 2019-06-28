@@ -14,6 +14,8 @@ var (
 	EnvPrefix = "dbgap"
 	// Version should be set at compile time to `git describe --tags --abbrev=0`
 	Version string
+	// BinaryName should be set on init in order to know what binary is using the flags library.
+	BinaryName string
 
 	LocationName  = "location"
 	AccessionName = "accession"
@@ -50,10 +52,10 @@ var (
 	EndpointMsg   = "ADVANCED: Change the endpoint used to communicate with SDL API.\nEnvironment Variable: [$DBGAP_ENDPOINT]"
 	AwsBatchMsg   = "ADVANCED: Adjust the amount of accessions put in one request to the SDL API when using an AWS location.\nEnvironment Variable: [$DBGAP_AWS-BATCH]"
 	GcpBatchMsg   = "ADVANCED: Adjust the amount of accessions put in one request to the SDL API when using a GCP location.\nEnvironment Variable: [$DBGAP_GCP-BATCH]"
-	AwsProfileMsg = "The desired AWS credentials profile in ~/.aws/credentials to use for instances when files require the requester (you) to pay for accessing the file.\nEnvironment Variable: [$DBGAP_AWS-PROFILE]\nNOTE: This account will be charged all cost accrued by accessing these certain files through fusera."
-	GcpProfileMsg = "The desired GCP credentials profile in ~/.aws/credentials to use for instances when files require the requester (you) to pay for accessing the file.\nEnvironment Variable: [$DBGAP_GCP-PROFILE]\nNOTE: This account will be charged all cost accrued by accessing these certain files through fusera. These credentials should be in the AWS supported format that Google provides in order to work with their AWS compatible API."
-	SilentMsg     = "Fusera prints nothing, most useful for using fusera in scripts."
-	VerboseMsg    = "Fusera prints everything, most useful for troubleshooting."
+	AwsProfileMsg = "The desired AWS credentials profile in ~/.aws/credentials to use for instances when files require the requester (you) to pay for accessing the file.\nEnvironment Variable: [$DBGAP_AWS-PROFILE]\nNOTE: This account will be charged all cost accrued by accessing these certain files."
+	GcpProfileMsg = "The desired GCP credentials profile in ~/.aws/credentials to use for instances when files require the requester (you) to pay for accessing the file.\nEnvironment Variable: [$DBGAP_GCP-PROFILE]\nNOTE: This account will be charged all cost accrued by accessing these certain files. These credentials should be in the AWS supported format that Google provides in order to work with their AWS compatible API."
+	SilentMsg     = "Prints nothing, most useful when running in scripts."
+	VerboseMsg    = "Prints everything, most useful for troubleshooting."
 )
 
 // ResolveLocation attempts to resolve the location on GCP and AWS.

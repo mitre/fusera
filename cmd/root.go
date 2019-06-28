@@ -48,10 +48,11 @@ func init() {
 
 	viper.SetEnvPrefix(flags.EnvPrefix)
 	viper.AutomaticEnv()
+	flags.BinaryName = "fusera"
 }
 
 var rootCmd = &cobra.Command{
-	Use:     "fusera",
+	Use:     flags.BinaryName,
 	Short:   "A FUSE interface to the NCBI Sequence Read Archive (SRA) - " + flags.Version,
 	Long:    ``,
 	Version: flags.Version,
