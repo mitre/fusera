@@ -300,6 +300,10 @@ var rootCmd = &cobra.Command{
 
 // Execute runs the root command of sracp, which copies files from the cloud to a local file system.
 func Execute() {
+	if os.Geteuid() == 0 {
+		fmt.Println("Running sracp as root is not supported. The tool should not require root.")
+		os.Exit(1)
+	}
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
