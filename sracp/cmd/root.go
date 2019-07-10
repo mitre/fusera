@@ -150,6 +150,12 @@ var rootCmd = &cobra.Command{
 			}
 		}
 		path := args[0]
+		// Test whether we can write to this location. If not, fail here.
+		err = os.MkdirAll(filepath.Join(path, ".test"), 0755)
+		if err != nil {
+			fmt.Printf("It seems like sracp cannot make directories under %s. Please check that you have correct permissions to write to that path.\n", path)
+			os.Exit(1)
+		}
 		batch := flags.ResolveBatch(platform.Name, awsBatch, gcpBatch)
 
 		var accessions []*fuseralib.Accession
