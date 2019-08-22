@@ -19,16 +19,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"mime/multipart"
 	"net/http"
 	"net/http/httputil"
-	"strings"
 
 	"github.com/mitre/fusera/info"
-
-	"github.com/mitre/fusera/awsutil"
 
 	"github.com/mitre/fusera/flags"
 	"github.com/mitre/fusera/fuseralib"
@@ -38,6 +34,109 @@ import (
 var (
 	defaultEndpoint = fmt.Sprintf("https://www.ncbi.nlm.nih.gov/Traces/sdl/%s/retrieve", info.SdlVersion)
 )
+
+// SDL is an interface that describes the functions of the SDL API.
+type Retriever interface {
+	Retrieve(accessions []string) ([]*Accession, error)
+	RetrieveAll(accession string) (*Accession, error)
+}
+
+// SDL SDL is the main object to use when wanting to interact with the SDL API.
+type SDL struct {
+	Client Retriever
+	Param  *Param
+}
+
+// Retrieve The function to call to get information on a single accession.
+func (s *SDL) Retrieve(accession string) (*fuseralib.Accession, error) {
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	writer, err := s.Param.Add(writer)
+	if err != nil {
+		return nil, err
+	}
+	err = addAccessions(writer, []string{accession})
+	if err != nil {
+		return nil, err
+	}
+	accs, err := s.Client.makeRequest(body, writer)
+	if err != nil {
+		return nil, err
+	}
+	if len(accs) != 1 {
+		return nil, errors.New("SDL API returned more accessions than requested")
+	}
+	return accs[0], nil
+}
+
+// RetrieveAll The function to call to get information on all the accessions.
+func (s *SDL) RetrieveAll() ([]*fuseralib.Accession, error) {
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	writer, err := s.Param.Add(writer)
+	if err != nil {
+		return nil, err
+	}
+	err = addAccessions(writer, s.Param.Acc)
+	if err != nil {
+		return nil, err
+	}
+	err = addMetaOnly(writer)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.Client.makeRequest(body, writer)
+}
+
+// SignAll Asks the SDL API to return locations (including signed links) for all the accessions, typically called on start up of Fusera when the eager flag has been set.
+func (s *SDL) SignAll() ([]*fuseralib.Accession, error) {
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	writer, err := s.Param.Add(writer)
+	if err != nil {
+		return nil, err
+	}
+	err = addAccessions(writer, s.Param.Acc)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.Client.makeRequest(body, writer)
+}
+
+// Sign The function to call to sign a single accession.
+func (s *SDL) Sign(accession string) (*fuseralib.Accession, error) {
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	writer, err := s.Param.Add(writer)
+	if err != nil {
+		return nil, err
+	}
+	err = addAccessions(writer, []string{accession})
+	if err != nil {
+		return nil, err
+	}
+	accs, err := s.Client.makeRequest(body, writer)
+	if err != nil {
+		return nil, err
+	}
+	if len(accs) != 1 {
+		return nil, errors.New("SDL API returned more accessions than requested")
+	}
+	return accs[0], nil
+}
+
+// Client is an implementation of the fuseralib.Resolver interface
+// that uses the SDL API to provide metadata, locations, and proper access
+// to files in the SDL system.
+type Client struct {
+	url      string
+	location string
+	types    map[string]bool
+	batch    int
+	ngc      []byte
+}
 
 // NewClient creates a client with given parameters to communicate with the SDL API.
 func NewClient(url, loc string, ngc []byte, types map[string]bool) *Client {
@@ -55,42 +154,7 @@ func NewClient(url, loc string, ngc []byte, types map[string]bool) *Client {
 	}
 }
 
-// Client is an implementation of the fuseralib.Resolver interface
-// that uses the SDL API to provide metadata, locations, and proper access
-// to files in the SDL system.
-type Client struct {
-	url      string
-	location string
-	types    map[string]bool
-	batch    int
-	ngc      []byte
-}
-
-// Retrieve Calls the retrieve endpoint on SDL with the list of accessions given.
-func (c *Client) Retrieve(accessions []string) ([]*fuseralib.Accession, error) {
-	return c.makeRequest(accessions, true)
-}
-
-// Sign has the SDL API create signed urls for all files under the given accession.
-func (c *Client) Sign(accession string) (*fuseralib.Accession, error) {
-	accs, err := c.makeRequest([]string{accession}, false)
-	if err != nil {
-		return nil, err
-	}
-	if len(accs) != 1 {
-		return nil, errors.New("SDL API returned more accessions than requested")
-	}
-	return accs[0], nil
-}
-
-func (c *Client) makeRequest(accessions []string, meta bool) ([]*fuseralib.Accession, error) {
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-	writer, err := c.addParams(writer, accessions, meta)
-	if err != nil {
-		return nil, err
-	}
-
+func (c *Client) makeRequest(body *bytes.Buffer, writer *multipart.Writer) ([]*fuseralib.Accession, error) {
 	req, err := http.NewRequest("POST", c.url, body)
 	if err != nil {
 		return nil, errors.New("can't create request to SDL API")
@@ -158,150 +222,41 @@ func sanitize(message VersionWrap) ([]*fuseralib.Accession, error) {
 	return list, nil
 }
 
-// NewEagerClient creates a client that has the SDL API sign urls ahead of time when retrieving data for accessions.
-func NewEagerClient(url, loc string, ngc []byte, types map[string]bool) *EagerClient {
-	if url == "" {
-		url = defaultEndpoint
-	}
-	if loc == "" {
-		return nil
-	}
-	return &EagerClient{
-		Client: Client{
-			url:      url,
-			location: loc,
-			types:    types,
-			ngc:      ngc,
-		},
-	}
-}
+// // NewGCPClient creates a client that has the SDL API sign urls ahead of time when retrieving data for accessions.
+// func NewGCPClient(url string, ngc []byte, types map[string]bool) *GCPClient {
+// 	if url == "" {
+// 		url = defaultEndpoint
+// 	}
+// 	return &GCPClient{
+// 		Client: Client{
+// 			url:   url,
+// 			ngc:   ngc,
+// 			types: types,
+// 		},
+// 	}
+// }
 
-// EagerClient A client that "eagerly" asks the API to go ahead and
-// create signed urls for all the files under all the accessions queried
-// through the retrieve endpoint.
-type EagerClient struct {
-	Client
-}
+// // GCPClient handles setting the parameters properly for when Google is the cloud platform.
+// type GCPClient struct {
+// 	Client
+// }
 
-// Retrieve has the SDL API return meta information for all files under the given accessions.
-// accessions: the accessions to get metadata for.
-func (c *EagerClient) Retrieve(accessions []string) ([]*fuseralib.Accession, error) {
-	return c.makeRequest(accessions, false)
-}
-
-// NewGCPClient creates a client that has the SDL API sign urls ahead of time when retrieving data for accessions.
-func NewGCPClient(url string, ngc []byte, types map[string]bool) *GCPClient {
-	if url == "" {
-		url = defaultEndpoint
-	}
-	return &GCPClient{
-		Client: Client{
-			url:   url,
-			ngc:   ngc,
-			types: types,
-		},
-	}
-}
-
-// GCPClient handles setting the parameters properly for when Google is the cloud platform.
-type GCPClient struct {
-	Client
-}
-
-// Sign gets a signed url for a file in a Google cloud region.
-func (c *GCPClient) Sign(accession string) (*fuseralib.Accession, error) {
-	// Get an instance token, set it to location.
-	platform, err := awsutil.FindLocation()
-	if err != nil {
-		return nil, errors.New("Could not refresh GCP instance token for sdl location")
-	}
-	c.location = string(platform.InstanceToken[:])
-	accs, err := c.makeRequest([]string{accession}, false)
-	if err != nil {
-		return nil, err
-	}
-	for _, a := range accs {
-		if a.ID == accession {
-			return a, nil
-		}
-	}
-	return nil, errors.New("SDL API did not return requested accession")
-}
-
-func (c *Client) addParams(writer *multipart.Writer, accessions []string, meta bool) (*multipart.Writer, error) {
-	if err := c.addLocation(writer); err != nil {
-		return nil, err
-	}
-	if err := c.addNgc(writer); err != nil {
-		return nil, err
-	}
-	if err := c.addFileType(writer); err != nil {
-		return nil, err
-	}
-	if meta {
-		if err := c.addMetaOnly(writer); err != nil {
-			return nil, err
-		}
-	}
-	if accessions != nil && len(accessions) > 0 {
-		if err := c.addAccessions(writer, accessions); err != nil {
-			return nil, err
-		}
-	}
-	if err := writer.Close(); err != nil {
-		return nil, errors.New("could not close multipart.Writer")
-	}
-	return writer, nil
-}
-
-func (c *Client) addFileType(writer *multipart.Writer) error {
-	if c.types != nil {
-		tt := make([]string, 0)
-		for k := range c.types {
-			tt = append(tt, k)
-		}
-		typesField := strings.Join(tt, ",")
-		if err := writer.WriteField("filetype", typesField); err != nil {
-			return errors.New("could not write filetype field to multipart.Writer")
-		}
-	}
-	return nil
-}
-
-func (c *Client) addNgc(writer *multipart.Writer) error {
-	if c.ngc != nil {
-		// handle ngc bytes
-		part, err := writer.CreateFormFile("ngc", "ngc")
-		if err != nil {
-			return errors.Wrapf(err, "couldn't create form file for ngc")
-		}
-		_, err = io.Copy(part, bytes.NewReader(c.ngc))
-		if err != nil {
-			return errors.Errorf("couldn't copy ngc contents: %s into multipart file to make request", c.ngc)
-		}
-	}
-	return nil
-}
-
-func (c *Client) addAccessions(writer *multipart.Writer, accessions []string) error {
-	for _, acc := range accessions {
-		if err := writer.WriteField("acc", acc); err != nil {
-			return errors.New("could not write acc field to multipart.Writer")
-		}
-	}
-	return nil
-}
-
-func (c *Client) addLocation(writer *multipart.Writer) error {
-	if err := writer.WriteField("location", c.location); err != nil {
-		return errors.New("could not write location field to multipart.Writer")
-	}
-	return nil
-}
-
-func (c *Client) addMetaOnly(writer *multipart.Writer) error {
-	if err := writer.WriteField("meta-only", "yes"); err != nil {
-		return errors.New("could not write meta-only field to multipart.Writer")
-	}
-	return nil
-}
+// // Sign gets a signed url for a file in a Google cloud region.
+// func (c *GCPClient) Sign(accession string) (*fuseralib.Accession, error) {
+// 	// Get an instance token, set it to location.
+// 	platform, err := gps.FindLocation()
+// 	if err != nil {
+// 		return nil, errors.New("Could not refresh GCP instance token for sdl location")
+// 	}
+// 	c.location = string(platform.InstanceToken[:])
+// 	accs, err := c.makeRequest([]string{accession}, false)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	for _, a := range accs {
+// 		if a.ID == accession {
+// 			return a, nil
+// 		}
+// 	}
+// 	return nil, errors.New("SDL API did not return requested accession")
+// }

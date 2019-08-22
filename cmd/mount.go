@@ -28,9 +28,9 @@ import (
 	"syscall"
 
 	"github.com/mattrbianchi/twig"
-	"github.com/mitre/fusera/awsutil"
 	"github.com/mitre/fusera/flags"
 	"github.com/mitre/fusera/fuseralib"
+	"github.com/mitre/fusera/gps"
 	"github.com/mitre/fusera/sdl"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -144,16 +144,16 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 		return errors.New("the manual setting of a google cloud location is not permitted, please allow fusera to resolve the location itself")
 	}
 	// Location takes longest if there's a failure, so validate it last.
-	var platform *awsutil.Platform
+	var platform *gps.Platform
 	if flags.Location == "" {
-		platform, err = flags.FindLocation()
+		platform, err = gps.FindLocation()
 		if err != nil {
 			twig.Debug(err)
 			fmt.Println(err)
 			return errors.New("no location provided")
 		}
 	} else {
-		platform, err = awsutil.NewManualPlatform(flags.Location)
+		platform, err = gps.NewManualPlatform(flags.Location)
 		if err != nil {
 			twig.Debug(err)
 			fmt.Println(err)
@@ -161,23 +161,19 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 		}
 	}
 
-	uid, gid := myUserAndGroup()
 	batch := flags.ResolveBatch(platform.Name, flags.AwsBatch, flags.GcpBatch)
-
-	var accessions []*fuseralib.Accession
-	var client fuseralib.API
-	var rootErr []byte
 	var location string
 	if platform.IsGCP() {
 		location = string(platform.InstanceToken[:])
 	} else {
-		location, err = flags.ResolveLocation()
+		location, err = gps.ResolveTraditionalLocation()
 		if err != nil {
 			twig.Debug(err)
 			fmt.Println(err)
 			return errors.New("no location provided")
 		}
 	}
+	var client fuseralib.API
 	if flags.Eager {
 		client = sdl.NewEagerClient(flags.Endpoint, location, token, types)
 	} else {
@@ -191,6 +187,8 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 		fmt.Printf("Giving location as: %s\n", string(platform.Region[:]))
 		fmt.Printf("Requesting accessions in batches of: %d\n", batch)
 	}
+	var accessions []*fuseralib.Accession
+	var rootErr []byte
 	if accs == nil || len(accs) == 0 { // We have no accessions
 		aa, err := client.Retrieve(nil)
 		if err != nil {
@@ -237,28 +235,17 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 		}
 		os.Exit(1)
 	}
-	credProfile := ""
-	if platform.IsAWS() {
-		credProfile = flags.AwsProfile
-	}
+
+	uid, gid := myUserAndGroup()
 	if platform.IsGCP() {
-		credProfile = flags.GcpProfile
 		client = sdl.NewGCPClient(flags.Endpoint, token, types)
 	}
 	opt := &fuseralib.Options{
-<<<<<<< HEAD
-		API:      client,
-		Acc:      accessions,
-		Platform: platform,
-		Profile:  credProfile,
-=======
-		API:        client,
-		Acc:        accessions,
-		Platform:   platform,
-		AwsProfile: flags.AwsProfile,
-		GcpProfile: flags.GcpProfile,
->>>>>>> 4fabd65... start of splitting cred profile
-
+		API:           client,
+		Acc:           accessions,
+		Platform:      platform,
+		AwsProfile:    flags.AwsProfile,
+		GcpProfile:    flags.GcpProfile,
 		UID:           uint32(uid),
 		GID:           uint32(gid),
 		MountOptions:  make(map[string]string),

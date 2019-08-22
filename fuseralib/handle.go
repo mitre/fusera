@@ -26,6 +26,7 @@ import (
 
 	"github.com/mattrbianchi/twig"
 	"github.com/mitre/fusera/awsutil"
+	"github.com/mitre/fusera/gps"
 
 	"github.com/jacobsa/fuse"
 	"github.com/jacobsa/fuse/fuseops"
@@ -39,19 +40,20 @@ type InodeAttributes struct {
 }
 
 type Inode struct {
-	ID          fuseops.InodeID
-	Name        *string
-	Link        string
-	Acc         string
-	ErrContents string
-	fs          *Fusera
-	Attributes  InodeAttributes
-	KnownSize   *uint64
-	AttrTime    time.Time
-	ReqPays     bool
-	Bucket      string
-	Key         string
-	Platform    *awsutil.Platform
+	ID           fuseops.InodeID
+	Name         *string
+	Link         string
+	Acc          string
+	ErrContents  string
+	fs           *Fusera
+	Attributes   InodeAttributes
+	KnownSize    *uint64
+	AttrTime     time.Time
+	ReqPays      bool
+	Bucket       string
+	Key          string
+	FilePlatform *gps.Platform
+	Platform     *gps.Platform
 
 	mu sync.Mutex // everything below is protected by mu
 

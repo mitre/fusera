@@ -27,15 +27,14 @@ import (
 )
 
 var (
-	// debug An internal flag, only accessible by uncommenting the init code below and recompiling. For developers.
 	debug bool
 )
 
 func init() {
-	// rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "Enable debug output.")
-	// if err := viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug")); err != nil {
-	// 	panic("INTERNAL ERROR: could not bind debug flag to debug environment variable")
-	// }
+	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "Enable debug output. Mostly for developers.")
+	if err := viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug")); err != nil {
+		panic("INTERNAL ERROR: could not bind debug flag to debug environment variable")
+	}
 
 	rootCmd.PersistentFlags().BoolVarP(&flags.Silent, "silent", "s", false, flags.SilentMsg)
 	if err := viper.BindPFlag("silent", mountCmd.Flags().Lookup("silent")); err != nil {

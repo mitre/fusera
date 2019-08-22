@@ -40,7 +40,7 @@ var (
 	GcpProfile, GcpProfileDefault string = "", "gcp"
 	Eager                         bool
 
-	LocationMsg   = "Cloud provider and region where files should be located.\nFORMAT: [cloud.region]\nEXAMPLES: [s3.us-east-1 | gs.US]\nNOTE: This can be auto-resolved if running on AWS or GCP.\nEnvironment Variable: [$DBGAP_LOCATION]"
+	LocationMsg   = "Fusera can resolve location when executed inside AWS or GCP environments, otherwise a location will need to be provided and errors in location might result in undesired outcomes.\nFORMAT: [cloud.region]\nEXAMPLES: [s3.us-east-1 | gs.US]\nEnvironment Variable: [$DBGAP_LOCATION]"
 	AccessionMsg  = "A list of accessions to mount or path to accession file.\nEXAMPLES: [\"SRR123,SRR456\" | local/accession/file | https://<bucket>.<region>.s3.amazonaws.com/<accession/file>]\nNOTE: If using an s3 url, the proper aws credentials need to be in place on the machine.\nEnvironment Variable: [$DBGAP_ACCESSION]"
 	NgcMsg        = "A path to an ngc file used to authorize access to accessions in dbGaP. If used in tandem with token, the token takes precedence.\nEXAMPLES: [local/ngc/file | https://<bucket>.<region>.s3.amazonaws.com/<ngc/file>]\nNOTE: If using an s3 url, the proper aws credentials need to be in place on the machine.\nEnvironment Variable: [$DBGAP_NGC]"
 	TokenMsg      = "A path to one of the various security tokens used to authorize access to accessions in dbGaP.\nEXAMPLES: [local/token/file | https://<bucket>.<region>.s3.amazonaws.com/<token/file>]\nNOTE: If using an s3 url, the proper aws credentials need to be in place on the machine.\nEnvironment Variable: [$DBGAP_TOKEN]"
@@ -53,27 +53,6 @@ var (
 	SilentMsg     = "Prints nothing, most useful when running in scripts."
 	VerboseMsg    = "Prints everything, most useful for troubleshooting."
 )
-
-// ResolveLocation attempts to resolve the location on GCP and AWS.
-// If location cannot be resolved, return error.
-func ResolveLocation() (string, error) {
-	loc, err := awsutil.ResolveTraditionalLocation()
-	if err != nil {
-		return "", err
-	}
-	return loc, nil
-}
-
-// FindLocation attempts to resolve the location on GCP and AWS.
-// If location cannot be resolved, return error.
-func FindLocation() (*awsutil.Platform, error) {
-	p, err := awsutil.FindLocation()
-	if err != nil {
-		return nil, err
-	}
-	// We still need region information to make requests
-	return p, nil
-}
 
 // ResolveAccession If a list of comma separated accessions was provided, use it.
 // Otherwise, if a path to a cart file was given, deduce whether it's on s3 or local.

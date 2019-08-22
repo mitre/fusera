@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/mitre/fusera/awsutil"
+	"github.com/mitre/fusera/gps"
 	"github.com/pkg/errors"
 
 	"github.com/jacobsa/fuse"
@@ -40,8 +41,9 @@ type Options struct {
 	API API
 	Acc []*Accession
 	//Region   string
-	Platform *awsutil.Platform
-	Profile  string
+	Platform   *gps.Platform
+	AwsProfile string
+	GcpProfile string
 
 	// File system
 	MountOptions      map[string]string

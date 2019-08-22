@@ -98,8 +98,8 @@ type File struct {
 // Validate Files
 // 1. Files need a name.
 // 2. Files need a type.
-// 3. Locations should be length one.
-// 4. Location should be valid.
+// 3. If there is a Location, there should only be one.
+// 4. If there is a Location, it should be valid.
 func (f *File) Validate() error {
 	if f.Name == "" {
 		return errors.Errorf("SDL API v%s returned a file without a name", info.SdlVersion)
@@ -107,11 +107,11 @@ func (f *File) Validate() error {
 	if f.Type == "" {
 		return errors.Errorf("SDL API v%s returned a file without a type", info.SdlVersion)
 	}
-	if len(f.Locations) == 0 {
-		return errors.Errorf("SDL API v%s returned a file without location details", info.SdlVersion)
-	}
-	if len(f.Locations) != 1 {
+	if len(f.Locations) > 1 {
 		return errors.Errorf("SDL API v%s returned multiple locations for a file", info.SdlVersion)
+	}
+	if len(f.Locations) == 0 {
+		return nil
 	}
 	err := f.Locations[0].Validate()
 	if err != nil {
@@ -122,17 +122,20 @@ func (f *File) Validate() error {
 
 // Transfigure Changes the SDL representation of a File into the Fusera representation.
 func (f *File) Transfigure() fuseralib.File {
-	l := f.Locations[0]
-	return fuseralib.File{
+	newfile := fuseralib.File{
 		Name:         f.Name,
 		Size:         f.Size,
 		Type:         f.Type,
 		ModifiedDate: f.ModifiedDate,
 		Md5Hash:      f.Md5Hash,
-		Link:         l.Link,
-		Service:      l.Service,
-		Region:       l.Region,
 	}
+	if len(f.Locations) > 0 {
+		l := f.Locations[0]
+		newfile.Link = l.Link
+		newfile.Service = l.Service
+		newfile.Region = l.Region
+	}
+	return newfile
 }
 
 // Location The JSON object used by the SDL API to represent the location of a file.
@@ -160,6 +163,11 @@ func (l *Location) Validate() error {
 		return errors.Errorf("SDL API v%s returned a file without indicating what region it's in", info.SdlVersion)
 	}
 	return nil
+}
+
+// TODO: I have a feeling this function will save a lot of heartburn between the different fields that could represent location.
+func (l *Location) addLocationToFile(file fuseralib.File) fuseralib.File {
+	return fuseralib.File{}
 }
 
 type ApiError struct {
