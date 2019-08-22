@@ -12,10 +12,6 @@ import (
 
 var (
 	EnvPrefix = "dbgap"
-	// Version should be set at compile time to `git describe --tags --abbrev=0`
-	Version string
-	// BinaryName should be set on init in order to know what binary is using the flags library.
-	BinaryName string
 
 	LocationName  = "location"
 	AccessionName = "accession"

@@ -22,7 +22,6 @@ import (
 	"net/http"
 	"os"
 	"runtime/debug"
-	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -142,13 +141,8 @@ func NewFusera(ctx context.Context, opt *Options) (*Fusera, error) {
 				file.Platform = opt.Platform
 			}
 			file.Acc = acc.ID
-			u, err := strconv.ParseUint(f.Size, 10, 64)
-			if err != nil {
-				// twig.Debug("%s: %s: failed to set file size to %s, couldn't parse into a uint64", acc.ID, file.Name, f.Size)
-				u = 0
-			}
 			file.Attributes = InodeAttributes{
-				Size:           u,
+				Size:           f.Size,
 				Mtime:          f.ModifiedDate,
 				ExpirationDate: f.ExpirationDate,
 			}
@@ -305,15 +299,9 @@ func (fs *Fusera) StatFS(ctx context.Context, op *fuseops.StatFSOp) (err error) 
 	var totalSpace uint64
 	for _, a := range fs.accs {
 		for _, f := range a.Files {
-			s, err := strconv.ParseUint(f.Size, 10, 64)
-			if err != nil {
-				totalSpace = 1024 * 1024 * 1024
-				goto skip
-			}
-			totalSpace += s
+			totalSpace += f.Size
 		}
 	}
-skip:
 	const blockSize = 4096
 	totalBlocks := totalSpace / blockSize
 	const INODES = 1 * 1000 * 1000 * 1000 // 1 billion

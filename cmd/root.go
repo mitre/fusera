@@ -21,14 +21,14 @@ import (
 
 	"github.com/mattrbianchi/twig"
 	"github.com/mitre/fusera/flags"
+	"github.com/mitre/fusera/info"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
 var (
-	debug   bool
-	verbose bool
-	silent  bool
+	// debug An internal flag, only accessible by uncommenting the init code below and recompiling. For developers.
+	debug bool
 )
 
 func init() {
@@ -49,14 +49,14 @@ func init() {
 
 	viper.SetEnvPrefix(flags.EnvPrefix)
 	viper.AutomaticEnv()
-	flags.BinaryName = "fusera"
+	info.BinaryName = "fusera"
 }
 
 var rootCmd = &cobra.Command{
-	Use:     flags.BinaryName,
-	Short:   "A FUSE interface to the NCBI Sequence Read Archive (SRA) - " + flags.Version,
+	Use:     info.BinaryName,
+	Short:   "A FUSE interface to the NCBI Sequence Read Archive (SRA) - " + info.Version,
 	Long:    ``,
-	Version: flags.Version,
+	Version: info.Version,
 }
 
 // Execute runs the main command of fusera, which has no action of its own,

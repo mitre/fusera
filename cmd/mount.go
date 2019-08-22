@@ -246,10 +246,18 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 		client = sdl.NewGCPClient(flags.Endpoint, token, types)
 	}
 	opt := &fuseralib.Options{
+<<<<<<< HEAD
 		API:      client,
 		Acc:      accessions,
 		Platform: platform,
 		Profile:  credProfile,
+=======
+		API:        client,
+		Acc:        accessions,
+		Platform:   platform,
+		AwsProfile: flags.AwsProfile,
+		GcpProfile: flags.GcpProfile,
+>>>>>>> 4fabd65... start of splitting cred profile
 
 		UID:           uint32(uid),
 		GID:           uint32(gid),
@@ -259,7 +267,8 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 	}
 
 	if flags.Verbose {
-		fmt.Printf("Profile for credentials if needed: %s\n", credProfile)
+		fmt.Printf("AWS profile for credentials if needed: %s\n", flags.AwsProfile)
+		fmt.Printf("GCP profile for credentials if needed: %s\n", flags.GcpProfile)
 		fmt.Printf("Platform: %s\n", opt.Platform.Name)
 		fmt.Printf("Region: %s\n", string(opt.Platform.Region))
 		fmt.Printf("Mountpoint: %s\n", opt.MountPoint)

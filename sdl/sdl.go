@@ -26,6 +26,8 @@ import (
 	"net/http/httputil"
 	"strings"
 
+	"github.com/mitre/fusera/info"
+
 	"github.com/mitre/fusera/awsutil"
 
 	"github.com/mitre/fusera/flags"
@@ -34,7 +36,7 @@ import (
 )
 
 var (
-	defaultEndpoint = "https://www.ncbi.nlm.nih.gov/Traces/sdl/1/retrieve"
+	defaultEndpoint = fmt.Sprintf("https://www.ncbi.nlm.nih.gov/Traces/sdl/%s/retrieve", info.SdlVersion)
 )
 
 // NewClient creates a client with given parameters to communicate with the SDL API.
@@ -93,7 +95,7 @@ func (c *Client) makeRequest(accessions []string, meta bool) ([]*fuseralib.Acces
 	if err != nil {
 		return nil, errors.New("can't create request to SDL API")
 	}
-	req.Header.Set("User-Agent", flags.BinaryName+"-"+flags.Version)
+	req.Header.Set("User-Agent", info.BinaryName+"-"+info.Version)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	if flags.Verbose {
 		reqdump, err := httputil.DumpRequestOut(req, true)
@@ -117,21 +119,43 @@ func (c *Client) makeRequest(accessions []string, meta bool) ([]*fuseralib.Acces
 		fmt.Println(string(resdump))
 	}
 	if resp.StatusCode != http.StatusOK {
-		var errPayload Payload
-		err := json.NewDecoder(resp.Body).Decode(&errPayload)
+		var apiErr ApiError
+		err := json.NewDecoder(resp.Body).Decode(&apiErr)
 		if err != nil {
 			response, _ := ioutil.ReadAll(resp.Body)
 			return nil, errors.Errorf("failed to decode error message from SDL API after getting HTTP status: %d: %s\nResponse:%v\n", resp.StatusCode, resp.Status, string(response))
 		}
-		return nil, errors.Errorf("SDL API returned error: %d: %s", errPayload.Status, errPayload.Message)
+		return nil, errors.Errorf("SDL API returned error: %d: %s", apiErr.Status, apiErr.Message)
 	}
-	var payload []Payload
-	err = json.NewDecoder(resp.Body).Decode(&payload)
+	message := VersionWrap{}
+	err = json.NewDecoder(resp.Body).Decode(&message)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to decode response from Name Resolver API")
 	}
 
-	return sanitize(payload)
+	return sanitize(message)
+}
+
+func sanitize(message VersionWrap) ([]*fuseralib.Accession, error) {
+	err := message.Validate()
+	if err != nil {
+		return nil, err
+	}
+	dup := map[string]bool{}
+	list := make([]*fuseralib.Accession, 0, len(message.Result))
+	for i, a := range message.Result {
+		err := message.Result[i].Validate(dup)
+		if err != nil {
+			if !flags.Silent {
+				fmt.Println(err.Error())
+			}
+			errAcc := &fuseralib.Accession{ID: message.Result[i].ID, Files: make(map[string]fuseralib.File)}
+			errAcc.AppendError(err.Error())
+			list = append(list, errAcc)
+		}
+		list = append(list, a.Transfigure())
+	}
+	return list, nil
 }
 
 // NewEagerClient creates a client that has the SDL API sign urls ahead of time when retrieving data for accessions.
@@ -204,59 +228,6 @@ func (c *GCPClient) Sign(accession string) (*fuseralib.Accession, error) {
 	return nil, errors.New("SDL API did not return requested accession")
 }
 
-func sanitize(payload []Payload) ([]*fuseralib.Accession, error) {
-	successfulAccessionExists := false
-	accs := make(map[string]*fuseralib.Accession)
-	for _, p := range payload {
-		errmsg := ""
-		if p.Status != http.StatusOK {
-			// Something is wrong with the whole accession
-			errmsg = fmt.Sprintf("Some errors were encountered with %s:\n", p.ID)
-			errmsg = errmsg + fmt.Sprintf("%d\t%s\n", p.Status, p.Message)
-			errAcc := &fuseralib.Accession{ID: p.ID, Files: make(map[string]fuseralib.File)}
-			if !flags.Silent {
-				fmt.Println(errmsg)
-			}
-			if a, ok := accs[p.ID]; ok {
-				// so we have a duplicate acc...
-				errAcc = a
-			}
-			errAcc.AppendError(errmsg)
-			accs[errAcc.ID] = errAcc
-			continue
-		}
-		// get existing acc or make a new one
-		acc := &fuseralib.Accession{ID: p.ID, Files: make(map[string]fuseralib.File)}
-		if a, ok := accs[p.ID]; ok {
-			// so we have a duplicate acc...
-			acc = a
-		}
-		for _, f := range p.Files {
-			// Checking if something is wrong with the individual files
-			if f.Name == "" {
-				if !flags.Silent {
-					fmt.Printf("API returned no name field for file: %v\n", f)
-				}
-				acc.AppendError(fmt.Sprintf("API returned no name field for file: %v\n", f))
-				accs[acc.ID] = acc
-				continue
-			}
-			acc.Files[f.Name] = f
-		}
-		successfulAccessionExists = true
-		accs[acc.ID] = acc
-	}
-	var err error
-	if !successfulAccessionExists {
-		err = errors.New("API returned no usable accessions")
-	}
-	list := make([]*fuseralib.Accession, 0, len(accs))
-	for _, v := range accs {
-		list = append(list, v)
-	}
-	return list, err
-}
-
 func (c *Client) addParams(writer *multipart.Writer, accessions []string, meta bool) (*multipart.Writer, error) {
 	if err := c.addLocation(writer); err != nil {
 		return nil, err
@@ -281,14 +252,6 @@ func (c *Client) addParams(writer *multipart.Writer, accessions []string, meta b
 		return nil, errors.New("could not close multipart.Writer")
 	}
 	return writer, nil
-}
-
-// Payload The JSON response from SDL's retrieve endpoint.
-type Payload struct {
-	ID      string           `json:"accession,omitempty"`
-	Status  int              `json:"status,omitempty"`
-	Message string           `json:"message,omitempty"`
-	Files   []fuseralib.File `json:"files,omitempty"`
 }
 
 func (c *Client) addFileType(writer *multipart.Writer) error {
