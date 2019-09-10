@@ -6,10 +6,14 @@ var (
 	// BinaryName should be set on init in order to know what binary is using the flags library.
 	BinaryName string
 	// SdlVersion The version of SDL to use.
-	SdlVersion = "unstable"
+	SdlVersion = "2"
 
 	accMap map[string]bool
 )
+
+func init() {
+	accMap = map[string]bool{}
+}
 
 // LoadAccessionMap Loads the Accession Map for easy lookups of whether an accession is a part of the many the user asked for.
 func LoadAccessionMap(aa []string) {

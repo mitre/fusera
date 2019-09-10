@@ -21,9 +21,10 @@ type VersionWrap struct {
 // 2. Result isn't empty.
 // 3. Results should be valid.
 func (v *VersionWrap) Validate() error {
-	if info.SdlVersion != v.Version {
-		return errors.Errorf("Expected version: %s, got version: %s", info.SdlVersion, v.Version)
-	}
+	// TODO: maybe in the future, but for now Fusera can point to different endpoints (i.e versions) which makes this annoying to try and track.
+	// if info.SdlVersion != v.Version {
+	// 	return errors.Errorf("Expected version: %s, got version: %s", info.SdlVersion, v.Version)
+	// }
 	if len(v.Result) == 0 {
 		return errors.Errorf("SDL API v%s returned an empty response", info.SdlVersion)
 	}

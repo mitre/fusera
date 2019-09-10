@@ -26,6 +26,8 @@ import (
 	"strconv"
 	"syscall"
 
+	"github.com/mitre/fusera/info"
+
 	"github.com/mattrbianchi/twig"
 	"github.com/mitre/fusera/flags"
 	"github.com/mitre/fusera/fuseralib"
@@ -152,7 +154,13 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 		}
 	}
 
+	info.LoadAccessionMap(accs)
 	var API = sdl.NewSDL()
+	// TODO: clean up later
+	fmt.Println("Accessions:")
+	for i, a := range accs {
+		fmt.Printf("%d:\t%s\n", i, a)
+	}
 	var param = sdl.NewParam(accs, locator, token, sdl.SetAcceptCharges(flags.AwsProfile, flags.GcpProfile), types)
 	API.Param = param
 	API.URL = flags.Endpoint
@@ -161,7 +169,7 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 		fmt.Printf("Using token at: %s\n", flags.Tokenpath)
 		fmt.Printf("Contents of token: %s\n", string(token[:]))
 		fmt.Printf("Limiting file types to: %v\n", types)
-		fmt.Printf("Giving location as: %s\n", string(locator.LocalityType()))
+		fmt.Printf("Giving locality as: %s\n", locator.LocalityType())
 		fmt.Printf("Requesting accessions in batches of: %d\n", flags.Batch)
 	}
 	var accessions []*fuseralib.Accession
@@ -197,6 +205,19 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 		}
 		os.Exit(1)
 	}
+
+	if flags.Verbose {
+		fmt.Println("Setting fusera options with:")
+		fmt.Println("Accessions:")
+		for i, a := range accessions {
+			fmt.Printf("%d:\t%s\n", i, a.ID)
+		}
+		fmt.Printf("Cloud is: %s\n", locator.SdlCloudName())
+		fmt.Printf("Region is: %s\n", region)
+		fmt.Printf("AWS profile for credentials if needed: %s\n", flags.AwsProfile)
+		fmt.Printf("GCP profile for credentials if needed: %s\n", flags.GcpProfile)
+		fmt.Printf("Mountpoint: %s\n", mountpoint)
+	}
 	opt := &fuseralib.Options{
 		API:           API,
 		Acc:           accessions,
@@ -207,16 +228,6 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 		MountOptions:  make(map[string]string),
 		MountPoint:    mountpoint,
 		MountPointArg: mountpoint,
-	}
-
-	//TODO: set the CloudProfile for Options
-
-	if flags.Verbose {
-		fmt.Printf("AWS profile for credentials if needed: %s\n", flags.AwsProfile)
-		fmt.Printf("GCP profile for credentials if needed: %s\n", flags.GcpProfile)
-		// fmt.Printf("Platform: %s\n", opt.Platform.Name)
-		// fmt.Printf("Region: %s\n", string(opt.Platform.Region))
-		fmt.Printf("Mountpoint: %s\n", opt.MountPoint)
 	}
 
 	if !flags.Silent {

@@ -69,9 +69,6 @@ func (p *Param) AddGlobals(writer *multipart.Writer) (*multipart.Writer, error) 
 	if err := p.addFileType(writer); err != nil {
 		return nil, err
 	}
-	if err := writer.Close(); err != nil {
-		return nil, errors.New("could not close multipart.Writer")
-	}
 	return writer, nil
 }
 

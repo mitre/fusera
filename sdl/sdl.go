@@ -65,6 +65,9 @@ func (s *SDL) Retrieve(accession string) (*fuseralib.Accession, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := writer.Close(); err != nil {
+		return nil, errors.New("could not close multipart.Writer")
+	}
 	accs, err := makeRequest(s.URL, body, writer)
 	if err != nil {
 		return nil, err
@@ -90,6 +93,9 @@ func (s *SDL) RetrieveAll() ([]*fuseralib.Accession, error) {
 	err = addMetaOnly(writer)
 	if err != nil {
 		return nil, err
+	}
+	if err := writer.Close(); err != nil {
+		return nil, errors.New("could not close multipart.Writer")
 	}
 
 	return makeRequest(s.URL, body, writer)
@@ -118,6 +124,8 @@ func (s *SDL) RetrieveAllInBatch(batch int) ([]*fuseralib.Accession, error) {
 		dot += batch
 	}
 	aa, err := retrieveListed(s.URL, s.Param.Acc[i:], s.Param)
+	// TODO: remove later
+	fmt.Println("aa returned from retrieveListed: ", aa)
 	if err != nil {
 		rootErr = append(rootErr, []byte(fmt.Sprintln(err.Error()))...)
 		rootErr = append(rootErr, []byte("List of accessions that failed in this batch:\n")...)
@@ -128,11 +136,14 @@ func (s *SDL) RetrieveAllInBatch(batch int) ([]*fuseralib.Accession, error) {
 	} else {
 		accessions = append(accessions, aa...)
 	}
-
+	// TODO: remove later
+	fmt.Println("Accessions returned from RetrieveAllInBatch: ", accessions)
 	return accessions, nil
 }
 
 func retrieveListed(url string, aa []string, param *Param) ([]*fuseralib.Accession, error) {
+	// TODO: remove later
+	fmt.Println("Accessions given to retrieveListed: ", aa)
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 	writer, err := param.AddGlobals(writer)
@@ -146,6 +157,9 @@ func retrieveListed(url string, aa []string, param *Param) ([]*fuseralib.Accessi
 	err = addMetaOnly(writer)
 	if err != nil {
 		return nil, err
+	}
+	if err := writer.Close(); err != nil {
+		return nil, errors.New("could not close multipart.Writer")
 	}
 
 	return makeRequest(url, body, writer)
@@ -162,6 +176,9 @@ func (s *SDL) Sign(accession string) (*fuseralib.Accession, error) {
 	err = addAccessions(writer, []string{accession})
 	if err != nil {
 		return nil, err
+	}
+	if err := writer.Close(); err != nil {
+		return nil, errors.New("could not close multipart.Writer")
 	}
 	accs, err := makeRequest(s.URL, body, writer)
 	if err != nil {
@@ -184,6 +201,9 @@ func (s *SDL) SignAll() ([]*fuseralib.Accession, error) {
 	err = addAccessions(writer, s.Param.Acc)
 	if err != nil {
 		return nil, err
+	}
+	if err := writer.Close(); err != nil {
+		return nil, errors.New("could not close multipart.Writer")
 	}
 
 	return makeRequest(s.URL, body, writer)
@@ -240,6 +260,8 @@ func sanitize(message VersionWrap) ([]*fuseralib.Accession, error) {
 	if err != nil {
 		return nil, err
 	}
+	//TODO: remove
+	fmt.Println("message result: ", message.Result)
 	dup := map[string]bool{}
 	list := make([]*fuseralib.Accession, 0, len(message.Result))
 	for i, a := range message.Result {
@@ -251,6 +273,7 @@ func sanitize(message VersionWrap) ([]*fuseralib.Accession, error) {
 			errAcc := &fuseralib.Accession{ID: message.Result[i].ID, Files: make(map[string]fuseralib.File)}
 			errAcc.AppendError(err.Error())
 			list = append(list, errAcc)
+			continue
 		}
 		list = append(list, a.Transfigure())
 	}
