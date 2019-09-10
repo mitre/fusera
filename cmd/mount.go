@@ -74,12 +74,12 @@ func init() {
 		panic("INTERNAL ERROR: could not bind batch flag to batch environment variable")
 	}
 
-	mountCmd.Flags().StringVarP(&flags.AwsProfile, "aws-profile", "", flags.AwsProfileDefault, flags.AwsProfileMsg)
+	mountCmd.Flags().StringVarP(&flags.AwsProfile, "aws-profile", "", "", flags.AwsProfileMsg)
 	if err := viper.BindPFlag("aws-profile", mountCmd.Flags().Lookup("aws-profile")); err != nil {
 		panic("INTERNAL ERROR: could not bind aws-profile flag to aws-profile environment variable")
 	}
 
-	mountCmd.Flags().StringVarP(&flags.GcpProfile, "gcp-profile", "", flags.GcpProfileDefault, flags.GcpProfileMsg)
+	mountCmd.Flags().StringVarP(&flags.GcpProfile, "gcp-profile", "", "", flags.GcpProfileMsg)
 	if err := viper.BindPFlag("gcp-profile", mountCmd.Flags().Lookup("gcp-profile")); err != nil {
 		panic("INTERNAL ERROR: could not bind gcp-profile flag to gcp-profile environment variable")
 	}
@@ -183,7 +183,7 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 			accessions = append(accessions, aa...)
 		}
 	} else { // We have accessions and we need to respect batch sizes.
-		accessions, err = API.RetrieveAllInBatch(flags.Batch)
+		accessions, err = API.SignAllInBatch(flags.Batch)
 		if err != nil {
 			if !flags.Silent {
 				fmt.Println(err.Error())
@@ -196,6 +196,14 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 		}
 		os.Exit(1)
 	}
+	// TODO: ends up not needed, but still might be a good idea
+	// accessions, err = cleanse(accessions)
+	// if err != nil {
+	// 	if !flags.Silent {
+	// 		fmt.Println("The information returned by the SDL API failed to be sufficient enough to run Fusera, shutting down.")
+	// 	}
+	// 	os.Exit(1)
+	// }
 
 	uid, gid := myUserAndGroup()
 	region, err := locator.Region()

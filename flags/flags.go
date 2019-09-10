@@ -32,11 +32,11 @@ var (
 	Tokenpath string
 	Filetype  string
 
-	Endpoint                      string
-	Batch, BatchDefault           int    = 0, 50
-	AwsProfile, AwsProfileDefault string = "", "default"
-	GcpProfile, GcpProfileDefault string = "", "gcp"
-	Eager                         bool
+	Endpoint            string
+	Batch, BatchDefault int = 0, 50
+	AwsProfile          string
+	GcpProfile          string
+	Eager               bool
 
 	LocationMsg   = "Fusera can resolve location when executed inside AWS or GCP environments, otherwise a location will need to be provided and errors in location might result in undesired outcomes.\nFORMAT: [cloud.region]\nEXAMPLES: [s3.us-east-1 | gs.US]\nEnvironment Variable: [$DBGAP_LOCATION]"
 	AccessionMsg  = "A list of accessions to mount or path to accession file.\nEXAMPLES: [\"SRR123,SRR456\" | local/accession/file | https://<bucket>.<region>.s3.amazonaws.com/<accession/file>]\nNOTE: If using an s3 url, the proper aws credentials need to be in place on the machine.\nEnvironment Variable: [$DBGAP_ACCESSION]"
