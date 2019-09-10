@@ -49,67 +49,15 @@ func NewSDL() *SDL {
 	}
 }
 
-// Retrieve The function to call to get information on a single accession.
-func (s *SDL) Retrieve(accession string) (*fuseralib.Accession, error) {
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-	writer, err := s.Param.AddGlobals(writer)
-	if err != nil {
-		return nil, err
-	}
-	err = addAccessions(writer, []string{accession})
-	if err != nil {
-		return nil, err
-	}
-	err = addMetaOnly(writer)
-	if err != nil {
-		return nil, err
-	}
-	if err := writer.Close(); err != nil {
-		return nil, errors.New("could not close multipart.Writer")
-	}
-	accs, err := makeRequest(s.URL, body, writer)
-	if err != nil {
-		return nil, err
-	}
-	if len(accs) != 1 {
-		return nil, errors.New("SDL API returned more accessions than requested")
-	}
-	return accs[0], nil
-}
-
-// RetrieveAll The function to call to get information on all the accessions.
-func (s *SDL) RetrieveAll() ([]*fuseralib.Accession, error) {
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-	writer, err := s.Param.AddGlobals(writer)
-	if err != nil {
-		return nil, err
-	}
-	err = addAccessions(writer, s.Param.Acc)
-	if err != nil {
-		return nil, err
-	}
-	err = addMetaOnly(writer)
-	if err != nil {
-		return nil, err
-	}
-	if err := writer.Close(); err != nil {
-		return nil, errors.New("could not close multipart.Writer")
-	}
-
-	return makeRequest(s.URL, body, writer)
-}
-
-// RetrieveAllInBatch The function to call to get information on all the accessions, but in batches to avoid overloading the SDL API.
-func (s *SDL) RetrieveAllInBatch(batch int) ([]*fuseralib.Accession, error) {
+// SignAllInBatch The function to call to get information on all the accessions, but in batches to avoid overloading the SDL API.
+func (s *SDL) SignAllInBatch(batch int) ([]*fuseralib.Accession, error) {
 	accessions := []*fuseralib.Accession{}
 	var rootErr []byte
 	// loop until all accessions are asked for
 	dot := batch
 	i := 0
 	for dot < len(s.Param.Acc) {
-		aa, err := retrieveListed(s.URL, s.Param.Acc[i:dot], s.Param)
+		aa, err := signListed(s.URL, s.Param.Acc[i:dot], s.Param)
 		if err != nil {
 			rootErr = append(rootErr, []byte(fmt.Sprintln(err.Error()))...)
 			rootErr = append(rootErr, []byte("List of accessions that failed in this batch:\n")...)
@@ -123,7 +71,7 @@ func (s *SDL) RetrieveAllInBatch(batch int) ([]*fuseralib.Accession, error) {
 		i = dot
 		dot += batch
 	}
-	aa, err := retrieveListed(s.URL, s.Param.Acc[i:], s.Param)
+	aa, err := signListed(s.URL, s.Param.Acc[i:], s.Param)
 	// TODO: remove later
 	fmt.Println("aa returned from retrieveListed: ", aa)
 	if err != nil {
@@ -141,7 +89,7 @@ func (s *SDL) RetrieveAllInBatch(batch int) ([]*fuseralib.Accession, error) {
 	return accessions, nil
 }
 
-func retrieveListed(url string, aa []string, param *Param) ([]*fuseralib.Accession, error) {
+func signListed(url string, aa []string, param *Param) ([]*fuseralib.Accession, error) {
 	// TODO: remove later
 	fmt.Println("Accessions given to retrieveListed: ", aa)
 	body := &bytes.Buffer{}
@@ -151,10 +99,6 @@ func retrieveListed(url string, aa []string, param *Param) ([]*fuseralib.Accessi
 		return nil, err
 	}
 	err = addAccessions(writer, aa)
-	if err != nil {
-		return nil, err
-	}
-	err = addMetaOnly(writer)
 	if err != nil {
 		return nil, err
 	}
@@ -252,10 +196,10 @@ func makeRequest(url string, body *bytes.Buffer, writer *multipart.Writer) ([]*f
 		return nil, errors.Wrap(err, "failed to decode response from Name Resolver API")
 	}
 
-	return sanitize(message)
+	return validate(message)
 }
 
-func sanitize(message VersionWrap) ([]*fuseralib.Accession, error) {
+func validate(message VersionWrap) ([]*fuseralib.Accession, error) {
 	err := message.Validate()
 	if err != nil {
 		return nil, err
@@ -278,4 +222,56 @@ func sanitize(message VersionWrap) ([]*fuseralib.Accession, error) {
 		list = append(list, a.Transfigure())
 	}
 	return list, nil
+}
+
+// Retrieve The function to call to get information on a single accession.
+func (s *SDL) Retrieve(accession string) (*fuseralib.Accession, error) {
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	writer, err := s.Param.AddGlobals(writer)
+	if err != nil {
+		return nil, err
+	}
+	err = addAccessions(writer, []string{accession})
+	if err != nil {
+		return nil, err
+	}
+	err = addMetaOnly(writer)
+	if err != nil {
+		return nil, err
+	}
+	if err := writer.Close(); err != nil {
+		return nil, errors.New("could not close multipart.Writer")
+	}
+	accs, err := makeRequest(s.URL, body, writer)
+	if err != nil {
+		return nil, err
+	}
+	if len(accs) != 1 {
+		return nil, errors.New("SDL API returned more accessions than requested")
+	}
+	return accs[0], nil
+}
+
+// RetrieveAll The function to call to get information on all the accessions.
+func (s *SDL) RetrieveAll() ([]*fuseralib.Accession, error) {
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	writer, err := s.Param.AddGlobals(writer)
+	if err != nil {
+		return nil, err
+	}
+	err = addAccessions(writer, s.Param.Acc)
+	if err != nil {
+		return nil, err
+	}
+	err = addMetaOnly(writer)
+	if err != nil {
+		return nil, err
+	}
+	if err := writer.Close(); err != nil {
+		return nil, errors.New("could not close multipart.Writer")
+	}
+
+	return makeRequest(s.URL, body, writer)
 }

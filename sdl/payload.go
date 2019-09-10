@@ -19,7 +19,6 @@ type VersionWrap struct {
 // Validate VersionWrap
 // 1. Expected Version.
 // 2. Result isn't empty.
-// 3. Results should be valid.
 func (v *VersionWrap) Validate() error {
 	// TODO: maybe in the future, but for now Fusera can point to different endpoints (i.e versions) which makes this annoying to try and track.
 	// if info.SdlVersion != v.Version {
@@ -93,14 +92,13 @@ type File struct {
 	Type         string     `json:"type,omitempty"`
 	ModifiedDate time.Time  `json:"modificationDate,omitempty"`
 	Md5Hash      string     `json:"md5,omitempty"`
-	Locations    []Location `json:"locations,omitempty`
+	Locations    []Location `json:"locations,omitempty"`
 }
 
 // Validate Files
 // 1. Files need a name.
 // 2. Files need a type.
-// 3. If there is a Location, there should only be one.
-// 4. If there is a Location, it should be valid.
+// 3. Files should have one location.
 func (f *File) Validate() error {
 	if f.Name == "" {
 		return errors.Errorf("SDL API v%s returned a file without a name", info.SdlVersion)
@@ -109,10 +107,10 @@ func (f *File) Validate() error {
 		return errors.Errorf("SDL API v%s returned a file without a type", info.SdlVersion)
 	}
 	if len(f.Locations) > 1 {
-		return errors.Errorf("SDL API v%s returned multiple locations for a file", info.SdlVersion)
+		return errors.Errorf("SDL API v%s returned multiple locations for file: %s", info.SdlVersion, f.Name)
 	}
 	if len(f.Locations) == 0 {
-		return nil
+		return errors.Errorf("SDL API v%s returned no locations for file: %s", info.SdlVersion, f.Name)
 	}
 	err := f.Locations[0].Validate()
 	if err != nil {
@@ -145,6 +143,7 @@ type Location struct {
 	Service        string    `json:"service,omitempty"`
 	Region         string    `json:"region,omitempty"`
 	ExpirationDate time.Time `json:"expirationDate,omitempty"`
+	PayRequired    bool      `json:"payRequired,omitempty"`
 	Bucket         string    `json:"bucket,omitempty"`
 	Key            string    `json:"key,omitempty"`
 }
@@ -153,6 +152,7 @@ type Location struct {
 // 1. Link shouldn't be empty.
 // 2. Service shouldn't be empty.
 // 3. Region shouldn't be empty.
+// 4. If PayRequired is true, there must be a Bucket and Key.
 func (l *Location) Validate() error {
 	if l.Link == "" {
 		return errors.Errorf("SDL API v%s returned a file without a link", info.SdlVersion)
@@ -162,6 +162,14 @@ func (l *Location) Validate() error {
 	}
 	if l.Region == "" {
 		return errors.Errorf("SDL API v%s returned a file without indicating what region it's in", info.SdlVersion)
+	}
+	if l.PayRequired {
+		if l.Bucket == "" {
+			return errors.Errorf("SDL API v%s returned a payRequired file without providing a bucket name", info.SdlVersion)
+		}
+		if l.Key == "" {
+			return errors.Errorf("SDL API v%s returned a payRequired file without providing a key for the bucket", info.SdlVersion)
+		}
 	}
 	return nil
 }
