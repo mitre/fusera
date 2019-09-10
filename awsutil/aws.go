@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/mitre/fusera/gps"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -91,11 +90,10 @@ func GetObjectRange(url, byteRange string) (*http.Response, error) {
 }
 
 type Client struct {
-	Bucket   string
-	Key      string
-	Region   string
-	Profile  string
-	Platform *gps.Platform
+	Bucket  string
+	Key     string
+	Region  string
+	Profile string
 }
 
 func NewClient(bucket, key, region, profile string) Client {
