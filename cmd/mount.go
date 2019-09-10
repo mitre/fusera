@@ -84,11 +84,6 @@ func init() {
 		panic("INTERNAL ERROR: could not bind gcp-profile flag to gcp-profile environment variable")
 	}
 
-	mountCmd.Flags().BoolVarP(&flags.Eager, "eager", "", false, "ADVANCED: Have fusera request that urls be signed by the API on start up.\nEnvironment Variable: [$DBGAP_EAGER]")
-	if err := viper.BindPFlag("eager", mountCmd.Flags().Lookup("eager")); err != nil {
-		panic("INTERNAL ERROR: could not bind eager flag to eager environment variable")
-	}
-
 	rootCmd.AddCommand(mountCmd)
 }
 
@@ -103,8 +98,8 @@ var mountCmd = &cobra.Command{
 // and then mounts a FUSE system.
 func mount(cmd *cobra.Command, args []string) (err error) {
 	setConfig()
-	foldEnvVarsIntoFlagValues()
-	tokenpath := foldNgcIntoToken(flags.Tokenpath, flags.NgcPath)
+	flags.FoldEnvVarsIntoFlagValues()
+	tokenpath := flags.FoldNgcIntoToken(flags.Tokenpath, flags.NgcPath)
 	var token []byte
 	if tokenpath != "" {
 		token, err = flags.ResolveNgcFile(tokenpath)
@@ -172,22 +167,10 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 		fmt.Printf("Giving locality as: %s\n", locator.LocalityType())
 		fmt.Printf("Requesting accessions in batches of: %d\n", flags.Batch)
 	}
-	var accessions []*fuseralib.Accession
-	if accs == nil || len(accs) == 0 { // We have no accessions, but they might be in the token. Alas, no batching can be done.
-		aa, err := API.RetrieveAll()
-		if err != nil {
-			if !flags.Silent {
-				fmt.Println(err.Error())
-			}
-		} else {
-			accessions = append(accessions, aa...)
-		}
-	} else { // We have accessions and we need to respect batch sizes.
-		accessions, err = API.SignAllInBatch(flags.Batch)
-		if err != nil {
-			if !flags.Silent {
-				fmt.Println(err.Error())
-			}
+	accessions, warnings := fuseralib.FetchAccessions(API, accs, flags.Batch)
+	if warnings != nil {
+		if !flags.Silent {
+			fmt.Println(err.Error())
 		}
 	}
 	if len(accessions) == 0 {
@@ -196,14 +179,6 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 		}
 		os.Exit(1)
 	}
-	// TODO: ends up not needed, but still might be a good idea
-	// accessions, err = cleanse(accessions)
-	// if err != nil {
-	// 	if !flags.Silent {
-	// 		fmt.Println("The information returned by the SDL API failed to be sufficient enough to run Fusera, shutting down.")
-	// 	}
-	// 	os.Exit(1)
-	// }
 
 	uid, gid := myUserAndGroup()
 	region, err := locator.Region()
@@ -256,26 +231,6 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 	}
 
 	return nil
-}
-
-func foldEnvVarsIntoFlagValues() {
-	flags.ResolveString("endpoint", &flags.Endpoint)
-	flags.ResolveInt("batch", &flags.Batch)
-	flags.ResolveString("aws-profile", &flags.AwsProfile)
-	flags.ResolveString("gcp-profile", &flags.GcpProfile)
-	flags.ResolveBool("eager", &flags.Eager)
-	flags.ResolveString("location", &flags.Location)
-	flags.ResolveString("accession", &flags.Accession)
-	flags.ResolveString("token", &flags.Tokenpath)
-	flags.ResolveString("ngc", &flags.NgcPath)
-	flags.ResolveString("filetype", &flags.Filetype)
-}
-
-func foldNgcIntoToken(token, ngc string) string {
-	if ngc != "" && token == "" {
-		return ngc
-	}
-	return token
 }
 
 func myUserAndGroup() (int, int) {
