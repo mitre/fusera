@@ -13,22 +13,34 @@ import (
 // Param The structure to hold all the various parameters accepted by the SDL API.
 type Param struct {
 	Acc      []string
-	Location gps.Locater
+	Location gps.Locator
 	Ngc      []byte
 	// Acceptable values are "aws", "gcp", or "aws,gcp"
 	AcceptCharges string
 	FileType      map[string]bool
 }
 
-// SetAcceptCharges Sets the accept-charges parameter to the proper value according to what cloud profiles were provided.
-func (p *Param) SetAcceptCharges(aws, gcp string) {
-	if aws != "" && gcp != "" {
-		p.AcceptCharges = "aws,gcp"
-	} else if aws != "" && gcp == "" {
-		p.AcceptCharges = "aws"
-	} else if aws == "" && gcp != "" {
-		p.AcceptCharges = "gcp"
+// NewParam Returns a Param, a convenient structure to hold all the global setting parameters for the SDL API. Most often to be used when creating a new SDL object.
+func NewParam(acc []string, location gps.Locator, ngc []byte, charges string, types map[string]bool) *Param {
+	return &Param{
+		Acc:           acc,
+		Location:      location,
+		Ngc:           ngc,
+		AcceptCharges: charges,
+		FileType:      types,
 	}
+}
+
+// SetAcceptCharges Sets the accept-charges parameter to the proper value according to what cloud profiles were provided.
+func SetAcceptCharges(aws, gcp string) string {
+	if aws != "" && gcp != "" {
+		return "aws,gcp"
+	} else if aws != "" && gcp == "" {
+		return "aws"
+	} else if aws == "" && gcp != "" {
+		return "gcp"
+	}
+	return ""
 }
 
 // FileTypes Returns the map of filetypes as a comma separated string for the SDL API parameter "filetypes".
@@ -40,8 +52,8 @@ func (p *Param) FileTypes() string {
 	return strings.Join(tt, ",")
 }
 
-// Add Adds all global parameters to writer for a request to the SDL API.
-func (p *Param) Add(writer *multipart.Writer) (*multipart.Writer, error) {
+// AddGlobals Adds all global parameters to writer for a request to the SDL API.
+func (p *Param) AddGlobals(writer *multipart.Writer) (*multipart.Writer, error) {
 	if err := p.addLocality(writer); err != nil {
 		return nil, err
 	}
