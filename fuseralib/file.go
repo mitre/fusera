@@ -256,13 +256,7 @@ func (fh *FileHandle) readFromStream(offset int64, buf []byte) (bytesRead int, e
 			sd, _ := time.ParseDuration("30s")
 			exp := fh.inode.Attributes.ExpirationDate
 			if fh.inode.ReqPays {
-				profile := ""
-				if fh.inode.FilePlatform.IsAWS() {
-					profile = fh.inode.fs.opt.AwsProfile
-				} else if fh.inode.FilePlatform.IsGCP() {
-					profile = fh.inode.fs.opt.GcpProfile
-				}
-				client := awsutil.NewClient(fh.inode.Bucket, fh.inode.Key, fh.inode.Platform.Region, profile)
+				client := awsutil.NewClient(fh.inode.Bucket, fh.inode.Key, fh.inode.Region, fh.inode.fs.opt.CloudProfile)
 				body, err := client.GetObjectRange(byteRange)
 				if err != nil {
 					return 0, syscall.EACCES

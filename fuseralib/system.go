@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/mitre/fusera/awsutil"
-	"github.com/mitre/fusera/gps"
 	"github.com/pkg/errors"
 
 	"github.com/jacobsa/fuse"
@@ -38,12 +37,10 @@ import (
 // Options is a collection of values that describe how Fusera should behave.
 type Options struct {
 	// The file used to authenticate with the SRA Data Locator API
-	API API
-	Acc []*Accession
-	//Region   string
-	Platform   *gps.Platform
-	AwsProfile string
-	GcpProfile string
+	API          API
+	Acc          []*Accession
+	Region       string
+	CloudProfile string
 
 	// File system
 	MountOptions      map[string]string
@@ -140,7 +137,7 @@ func NewFusera(ctx context.Context, opt *Options) (*Fusera, error) {
 				file.ReqPays = true
 				file.Bucket = f.Bucket
 				file.Key = f.Key
-				file.Platform = opt.Platform
+				file.Region = opt.Region
 			}
 			file.Acc = acc.ID
 			file.Attributes = InodeAttributes{
