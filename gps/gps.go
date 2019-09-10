@@ -1,7 +1,9 @@
 package gps
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -69,15 +71,17 @@ func (a *AwsLocation) Region() (string, error) {
 
 // Locality Returns the locality for AWS environment. //TODO: Implement
 func (a *AwsLocation) Locality() string {
-	return ""
+	token, err := retrieveAWSInstanceToken()
+	if err != nil {
+		return ""
+	}
+	return string(token)
 }
 
 // LocalityType Returns the locality-type for AWS environment.
 func (a *AwsLocation) LocalityType() string {
 	return "aws_pkcs7"
 }
-
-// TODO: try to be more siphisticated in figuring out if location is ncbi or follows cloud.region format
 
 // ManualLocation A location for a manual environment.
 type ManualLocation struct {
@@ -125,68 +129,6 @@ func GenerateLocator() (Locator, error) {
 	}
 	return &AwsLocation{}, nil
 }
-
-// ResolveTraditionalLocation Forms the traditional location string.
-// func ResolveTraditionalLocation() (string, error) {
-// 	platform, err := ResolveRegion()
-// 	if err != nil {
-// 		return "", err
-// 	}
-// 	return platform.Name + "." + platform.Region, nil
-// }
-
-// FindLocation Attempts to find the location fusera is running, be it GCP or AWS.
-// If location cannot be resolved, return error.
-// FindLocation attempts to figure out which cloud
-// provider Fusera is running on and what region of that cloud.
-// func FindLocation() (*Platform, error) {
-// 	p := &Platform{}
-// 	aws, err := resolveAwsRegion()
-// 	if err != nil {
-// 		// could be on google
-// 		// retain aws error message
-// 		msg := err.Error()
-// 		token, err := retrieveGCPInstanceToken()
-// 		if err != nil {
-// 			// return both aws and google error messages
-// 			return nil, errors.Wrap(err, msg)
-// 		}
-// 		zone, err := resolveGcpZone()
-// 		if err != nil {
-// 			// return both aws and google error messages
-// 			return nil, errors.Wrap(err, msg)
-// 		}
-// 		p.Name = "gs"
-// 		p.Region = zone
-// 		p.InstanceToken = token
-// 		return p, nil
-// 	}
-// 	p.Name = "s3"
-// 	p.Region = aws
-// 	return p, nil
-// }
-
-// ResolveRegion Attempt to resolve the location on aws or gs.
-// func ResolveRegion() (*Platform, error) {
-// 	platform := &Platform{}
-// 	region, err := resolveAwsRegion()
-// 	if err != nil {
-// 		// could be on google
-// 		// retain aws error message
-// 		msg := err.Error()
-// 		region, err = resolveGcpZone()
-// 		if err != nil {
-// 			// return both aws and google error messages
-// 			return nil, errors.Wrap(err, msg)
-// 		}
-// 		platform.Name = "gs"
-// 		platform.Region = region
-// 		return platform, nil
-// 	}
-// 	platform.Name = "s3"
-// 	platform.Region = region
-// 	return platform, nil
-// }
 
 func resolveAwsRegion() (string, error) {
 	client := &http.Client{
@@ -285,14 +227,122 @@ func retrieveGCPInstanceToken() ([]byte, error) {
 	req.Header.Add("Metadata-Flavor", "Google")
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, errors.Wrapf(err, "location was not provided, fusera attempted to resolve region but encountered an error, this feature only works when fusera is on an amazon or google instance")
+		return nil, errors.Wrapf(err, "fusera attempted to retrieve an instance token but encountered an error, this feature only works when fusera is on an amazon or google instance")
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, errors.Errorf("issue trying to retreive GCP instance token, got: %d: %s", resp.StatusCode, resp.Status)
 	}
 	token, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, errors.New("issue trying to resolve region, couldn't decode response from google")
+		return nil, errors.New("issue trying to retrieve an instance token, couldn't decode response from google")
 	}
 	return token, nil
 }
+
+//-----BEGIN PKCS7-----
+
+//-----END PKCS7-----
+
+func retrieveAWSInstanceToken() ([]byte, error) {
+	// make a request to token endpoint
+	client := &http.Client{
+		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   1 * time.Second,
+				KeepAlive: 1 * time.Second,
+				DualStack: true,
+			}).DialContext,
+			MaxIdleConns:          1000,
+			MaxIdleConnsPerHost:   1000,
+			IdleConnTimeout:       500 * time.Millisecond,
+			TLSHandshakeTimeout:   500 * time.Millisecond,
+			ExpectContinueTimeout: 500 * time.Millisecond,
+		},
+	}
+	resp, err := client.Get("http://169.254.169.254/latest/dynamic/instance-identity/pkcs7")
+	if err != nil {
+		return nil, errors.Wrapf(err, "fusera attempted to retrieve an instance token but encountered an error, this feature only works when fusera is on an amazon or google instance")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.Errorf("issue trying to retreive AWS instance token, got: %d: %s", resp.StatusCode, resp.Status)
+	}
+	token, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, errors.New("issue trying to retrieve an instance token, couldn't decode response from aws")
+	}
+	resp, err = client.Get("http://169.254.169.254/latest/dynamic/instance-identity/document")
+	if err != nil {
+		return nil, errors.Wrapf(err, "fusera attempted to retrieve the identity document for an instance token but encountered an error, this feature only works when fusera is on an amazon or google instance")
+	}
+	document, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, errors.New("issue trying to retrieve the identity document for an instance token, couldn't decode response from aws")
+	}
+	beginPKCS7 := base64.StdEncoding.EncodeToString([]byte("-----BEGIN PKCS7-----"))
+	endPKCS7 := base64.StdEncoding.EncodeToString([]byte("-----END PKCS7-----"))
+	encodedDoc := base64.StdEncoding.EncodeToString([]byte(document))
+	return []byte(fmt.Sprintf("%s\n%s\n%s\n.%s", beginPKCS7, endPKCS7, token, encodedDoc)), nil
+}
+
+// ResolveTraditionalLocation Forms the traditional location string.
+// func ResolveTraditionalLocation() (string, error) {
+// 	platform, err := ResolveRegion()
+// 	if err != nil {
+// 		return "", err
+// 	}
+// 	return platform.Name + "." + platform.Region, nil
+// }
+
+// FindLocation Attempts to find the location fusera is running, be it GCP or AWS.
+// If location cannot be resolved, return error.
+// FindLocation attempts to figure out which cloud
+// provider Fusera is running on and what region of that cloud.
+// func FindLocation() (*Platform, error) {
+// 	p := &Platform{}
+// 	aws, err := resolveAwsRegion()
+// 	if err != nil {
+// 		// could be on google
+// 		// retain aws error message
+// 		msg := err.Error()
+// 		token, err := retrieveGCPInstanceToken()
+// 		if err != nil {
+// 			// return both aws and google error messages
+// 			return nil, errors.Wrap(err, msg)
+// 		}
+// 		zone, err := resolveGcpZone()
+// 		if err != nil {
+// 			// return both aws and google error messages
+// 			return nil, errors.Wrap(err, msg)
+// 		}
+// 		p.Name = "gs"
+// 		p.Region = zone
+// 		p.InstanceToken = token
+// 		return p, nil
+// 	}
+// 	p.Name = "s3"
+// 	p.Region = aws
+// 	return p, nil
+// }
+
+// ResolveRegion Attempt to resolve the location on aws or gs.
+// func ResolveRegion() (*Platform, error) {
+// 	platform := &Platform{}
+// 	region, err := resolveAwsRegion()
+// 	if err != nil {
+// 		// could be on google
+// 		// retain aws error message
+// 		msg := err.Error()
+// 		region, err = resolveGcpZone()
+// 		if err != nil {
+// 			// return both aws and google error messages
+// 			return nil, errors.Wrap(err, msg)
+// 		}
+// 		platform.Name = "gs"
+// 		platform.Region = region
+// 		return platform, nil
+// 	}
+// 	platform.Name = "s3"
+// 	platform.Region = region
+// 	return platform, nil
+// }
