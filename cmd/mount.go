@@ -24,7 +24,6 @@ import (
 	"os/signal"
 	"os/user"
 	"strconv"
-	"strings"
 	"syscall"
 
 	"github.com/mattrbianchi/twig"
@@ -68,19 +67,14 @@ func init() {
 		panic("INTERNAL ERROR: could not bind endpoint flag to endpoint environment variable")
 	}
 
-	mountCmd.Flags().IntVarP(&flags.AwsBatch, "aws-batch", "", flags.AwsDefault, flags.AwsBatchMsg)
-	if err := viper.BindPFlag("aws-batch", mountCmd.Flags().Lookup("aws-batch")); err != nil {
-		panic("INTERNAL ERROR: could not bind aws-batch flag to aws-batch environment variable")
+	mountCmd.Flags().IntVarP(&flags.Batch, "batch", "", flags.BatchDefault, flags.BatchMsg)
+	if err := viper.BindPFlag("batch", mountCmd.Flags().Lookup("batch")); err != nil {
+		panic("INTERNAL ERROR: could not bind batch flag to batch environment variable")
 	}
 
 	mountCmd.Flags().StringVarP(&flags.AwsProfile, "aws-profile", "", flags.AwsProfileDefault, flags.AwsProfileMsg)
 	if err := viper.BindPFlag("aws-profile", mountCmd.Flags().Lookup("aws-profile")); err != nil {
 		panic("INTERNAL ERROR: could not bind aws-profile flag to aws-profile environment variable")
-	}
-
-	mountCmd.Flags().IntVarP(&flags.GcpBatch, "gcp-batch", "", flags.GcpDefault, flags.GcpBatchMsg)
-	if err := viper.BindPFlag("gcp-batch", mountCmd.Flags().Lookup("gcp-batch")); err != nil {
-		panic("INTERNAL ERROR: could not bind gcp-batch flag to gcp-batch environment variable")
 	}
 
 	mountCmd.Flags().StringVarP(&flags.GcpProfile, "gcp-profile", "", flags.GcpProfileDefault, flags.GcpProfileMsg)
@@ -140,93 +134,52 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 	if !flags.HavePermissions(mountpoint) {
 		return errors.New("incorrect permissions for mountpoint")
 	}
-	if strings.HasPrefix(flags.Location, "gs") {
-		return errors.New("the manual setting of a google cloud location is not permitted, please allow fusera to resolve the location itself")
-	}
 	// Location takes longest if there's a failure, so validate it last.
-	var platform *gps.Platform
-	if flags.Location == "" {
-		platform, err = gps.FindLocation()
-		if err != nil {
-			twig.Debug(err)
-			fmt.Println(err)
-			return errors.New("no location provided")
-		}
-	} else {
-		platform, err = gps.NewManualPlatform(flags.Location)
+	var locator gps.Locator
+	if flags.Location != "" {
+		locator, err = gps.NewManualLocation(flags.Location)
 		if err != nil {
 			twig.Debug(err)
 			fmt.Println(err)
 			return err
 		}
-	}
-
-	batch := flags.ResolveBatch(platform.Name, flags.AwsBatch, flags.GcpBatch)
-	var location string
-	if platform.IsGCP() {
-		location = string(platform.InstanceToken[:])
-	} else {
-		location, err = gps.ResolveTraditionalLocation()
+	} else { // figure out which locator we'll need
+		locator, err = gps.GenerateLocator()
 		if err != nil {
 			twig.Debug(err)
 			fmt.Println(err)
 			return errors.New("no location provided")
 		}
 	}
-	var client fuseralib.API
-	if flags.Eager {
-		client = sdl.NewEagerClient(flags.Endpoint, location, token, types)
-	} else {
-		client = sdl.NewClient(flags.Endpoint, location, token, types)
-	}
+
+	var API = sdl.NewSDL()
+	var param = sdl.NewParam(accs, locator, token, sdl.SetAcceptCharges(flags.AwsProfile, flags.GcpProfile), types)
+	API.Param = param
+	API.URL = flags.Endpoint
 	if flags.Verbose {
 		fmt.Printf("Communicating with SDL API at: %s\n", flags.Endpoint)
 		fmt.Printf("Using token at: %s\n", flags.Tokenpath)
 		fmt.Printf("Contents of token: %s\n", string(token[:]))
 		fmt.Printf("Limiting file types to: %v\n", types)
-		fmt.Printf("Giving location as: %s\n", string(platform.Region[:]))
-		fmt.Printf("Requesting accessions in batches of: %d\n", batch)
+		fmt.Printf("Giving location as: %s\n", string(locator.LocalityType()))
+		fmt.Printf("Requesting accessions in batches of: %d\n", flags.Batch)
 	}
 	var accessions []*fuseralib.Accession
-	var rootErr []byte
-	if accs == nil || len(accs) == 0 { // We have no accessions
-		aa, err := client.Retrieve(nil)
+	if accs == nil || len(accs) == 0 { // We have no accessions, but they might be in the token. Alas, no batching can be done.
+		aa, err := API.RetrieveAll()
 		if err != nil {
-			rootErr = append(rootErr, []byte(fmt.Sprintln(err.Error()))...)
 			if !flags.Silent {
-				fmt.Println(string(rootErr))
+				fmt.Println(err.Error())
 			}
 		} else {
 			accessions = append(accessions, aa...)
 		}
 	} else { // We have accessions and we need to respect batch sizes.
-		dot := batch
-		i := 0
-		for dot < len(accs) {
-			aa, err := client.Retrieve(accs[i:dot])
-			if err != nil {
-				rootErr = append(rootErr, []byte(fmt.Sprintln(err.Error()))...)
-				rootErr = append(rootErr, []byte("List of accessions that failed in this batch:\n")...)
-				rootErr = append(rootErr, []byte(fmt.Sprintln(accs[i:dot]))...)
-				if !flags.Silent {
-					fmt.Println(string(rootErr))
-				}
-			} else {
-				accessions = append(accessions, aa...)
-			}
-			i = dot
-			dot += batch
-		}
-		aa, err := client.Retrieve(accs[i:])
+		accessions, err = API.RetrieveAllInBatch(flags.Batch)
 		if err != nil {
-			rootErr = append(rootErr, []byte(fmt.Sprintln(err.Error()))...)
-			rootErr = append(rootErr, []byte("List of accessions that failed in this batch:\n")...)
-			rootErr = append(rootErr, []byte(fmt.Sprintln(accs[i:]))...)
 			if !flags.Silent {
-				fmt.Println(string(rootErr))
+				fmt.Println(err.Error())
 			}
-		} else {
-			accessions = append(accessions, aa...)
 		}
 	}
 	if len(accessions) == 0 {
@@ -237,15 +190,18 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 	}
 
 	uid, gid := myUserAndGroup()
-	if platform.IsGCP() {
-		client = sdl.NewGCPClient(flags.Endpoint, token, types)
+	region, err := locator.Region()
+	if err != nil {
+		if !flags.Silent {
+			fmt.Println("It seems like fusera is encountering errors resolving its region, shutting down.")
+		}
+		os.Exit(1)
 	}
 	opt := &fuseralib.Options{
-		API:           client,
+		API:           API,
 		Acc:           accessions,
-		Platform:      platform,
-		AwsProfile:    flags.AwsProfile,
-		GcpProfile:    flags.GcpProfile,
+		Region:        region,
+		CloudProfile:  flags.SetProfile(locator.SdlCloudName()),
 		UID:           uint32(uid),
 		GID:           uint32(gid),
 		MountOptions:  make(map[string]string),
@@ -253,11 +209,13 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 		MountPointArg: mountpoint,
 	}
 
+	//TODO: set the CloudProfile for Options
+
 	if flags.Verbose {
 		fmt.Printf("AWS profile for credentials if needed: %s\n", flags.AwsProfile)
 		fmt.Printf("GCP profile for credentials if needed: %s\n", flags.GcpProfile)
-		fmt.Printf("Platform: %s\n", opt.Platform.Name)
-		fmt.Printf("Region: %s\n", string(opt.Platform.Region))
+		// fmt.Printf("Platform: %s\n", opt.Platform.Name)
+		// fmt.Printf("Region: %s\n", string(opt.Platform.Region))
 		fmt.Printf("Mountpoint: %s\n", opt.MountPoint)
 	}
 
@@ -283,8 +241,7 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 
 func foldEnvVarsIntoFlagValues() {
 	flags.ResolveString("endpoint", &flags.Endpoint)
-	flags.ResolveInt("aws-batch", &flags.AwsBatch)
-	flags.ResolveInt("gcp-batch", &flags.GcpBatch)
+	flags.ResolveInt("batch", &flags.Batch)
 	flags.ResolveString("aws-profile", &flags.AwsProfile)
 	flags.ResolveString("gcp-profile", &flags.GcpProfile)
 	flags.ResolveBool("eager", &flags.Eager)

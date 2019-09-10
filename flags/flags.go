@@ -19,8 +19,7 @@ var (
 	TokenName     = "token"
 	FiletypeName  = "filetype"
 	EndpointName  = "endpoint"
-	AwsBatchName  = "aws-batch"
-	GcpBatchName  = "gcp-batch"
+	BatchName     = "batch"
 	SilentName    = "silent"
 	VerboseName   = "verbose"
 
@@ -34,8 +33,7 @@ var (
 	Filetype  string
 
 	Endpoint                      string
-	AwsBatch, AwsDefault          int    = 0, 50
-	GcpBatch, GcpDefault          int    = 0, 25
+	Batch, BatchDefault           int    = 0, 50
 	AwsProfile, AwsProfileDefault string = "", "default"
 	GcpProfile, GcpProfileDefault string = "", "gcp"
 	Eager                         bool
@@ -46,7 +44,7 @@ var (
 	TokenMsg      = "A path to one of the various security tokens used to authorize access to accessions in dbGaP.\nEXAMPLES: [local/token/file | https://<bucket>.<region>.s3.amazonaws.com/<token/file>]\nNOTE: If using an s3 url, the proper aws credentials need to be in place on the machine.\nEnvironment Variable: [$DBGAP_TOKEN]"
 	FiletypeMsg   = "A list of the only file types to copy.\nEXAMPLES: \"cram,crai,bam,bai\"\nEnvironment Variable: [$DBGAP_FILETYPE]"
 	EndpointMsg   = "ADVANCED: Change the endpoint used to communicate with SDL API.\nEnvironment Variable: [$DBGAP_ENDPOINT]"
-	AwsBatchMsg   = "ADVANCED: Adjust the amount of accessions put in one request to the SDL API when using an AWS location.\nEnvironment Variable: [$DBGAP_AWS-BATCH]"
+	BatchMsg      = "ADVANCED: Adjust the amount of accessions put in one request to the SDL API.\nEnvironment Variable: [$DBGAP_BATCH]"
 	GcpBatchMsg   = "ADVANCED: Adjust the amount of accessions put in one request to the SDL API when using a GCP location.\nEnvironment Variable: [$DBGAP_GCP-BATCH]"
 	AwsProfileMsg = "The desired AWS credentials profile in ~/.aws/credentials to use for instances when files require the requester (you) to pay for accessing the file.\nEnvironment Variable: [$DBGAP_AWS-PROFILE]\nNOTE: This account will be charged all cost accrued by accessing these certain files."
 	GcpProfileMsg = "The desired GCP credentials profile in ~/.aws/credentials to use for instances when files require the requester (you) to pay for accessing the file.\nEnvironment Variable: [$DBGAP_GCP-PROFILE]\nNOTE: This account will be charged all cost accrued by accessing these certain files. These credentials should be in the AWS supported format that Google provides in order to work with their AWS compatible API."
@@ -147,6 +145,15 @@ func FileExists(path string) bool {
 func HavePermissions(path string) bool {
 	_, err := os.Stat(path)
 	return !os.IsPermission(err)
+}
+
+func SetProfile(cloud string) string {
+	if IsAWS(cloud) {
+		return AwsProfile
+	} else if IsGCP(cloud) {
+		return GcpProfile
+	}
+	return ""
 }
 
 func IsAWS(location string) bool {
