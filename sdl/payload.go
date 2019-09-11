@@ -131,8 +131,13 @@ func (f *File) Transfigure() fuseralib.File {
 	if len(f.Locations) > 0 {
 		l := f.Locations[0]
 		newfile.Link = l.Link
+		newfile.ExpirationDate = l.ExpirationDate
 		newfile.Service = l.Service
 		newfile.Region = l.Region
+		newfile.Bucket = l.Bucket
+		newfile.Key = l.Key
+		newfile.CeRequired = l.CeRequired
+		newfile.PayRequired = l.PayRequired
 	}
 	return newfile
 }
@@ -143,6 +148,7 @@ type Location struct {
 	Service        string    `json:"service,omitempty"`
 	Region         string    `json:"region,omitempty"`
 	ExpirationDate time.Time `json:"expirationDate,omitempty"`
+	CeRequired     bool      `json:"ceRequired,omitempty"`
 	PayRequired    bool      `json:"payRequired,omitempty"`
 	Bucket         string    `json:"bucket,omitempty"`
 	Key            string    `json:"key,omitempty"`

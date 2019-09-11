@@ -133,12 +133,13 @@ func NewFusera(ctx context.Context, opt *Options) (*Fusera, error) {
 			dir.mu.Lock()
 			file := NewInode(fs, dir, awsutil.String(name), &fullFileName)
 			file.Link = f.Link
-			if f.Bucket != "" {
-				file.ReqPays = true
+			if f.PayRequired {
+				file.ReqPays = f.PayRequired
+				file.Region = opt.Region
 				file.Bucket = f.Bucket
 				file.Key = f.Key
-				file.Region = opt.Region
 			}
+			file.CeRequired = f.CeRequired
 			file.Acc = acc.ID
 			file.Attributes = InodeAttributes{
 				Size:           f.Size,
