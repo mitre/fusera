@@ -180,7 +180,6 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 		os.Exit(1)
 	}
 
-	uid, gid := myUserAndGroup()
 	region, err := locator.Region()
 	if err != nil {
 		if !flags.Silent {
@@ -201,6 +200,7 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 		fmt.Printf("GCP profile for credentials if needed: %s\n", flags.GcpProfile)
 		fmt.Printf("Mountpoint: %s\n", mountpoint)
 	}
+	uid, gid := myUserAndGroup()
 	opt := &fuseralib.Options{
 		API:           API,
 		Acc:           accessions,
