@@ -252,55 +252,9 @@ func (fh *FileHandle) readFromStream(offset int64, buf []byte) (bytesRead int, e
 	}
 
 	if fh.reader == nil {
-		if fh.inode.ErrContents == "" {
-			sd, _ := time.ParseDuration("30s")
-			exp := fh.inode.Attributes.ExpirationDate
-			if fh.inode.ReqPays {
-				client := awsutil.NewClient(fh.inode.Bucket, fh.inode.Key, fh.inode.Region, fh.inode.fs.opt.CloudProfile)
-				body, err := client.GetObjectRange(byteRange)
-				if err != nil {
-					return 0, syscall.EACCES
-				}
-				fh.reader = body
-			} else if fh.inode.Link == "" {
-				// we need to get a link no matter what
-				if flags.Verbose {
-					fmt.Printf("seems like we don't have a url for: %s\n", *fh.inode.Name)
-				}
-				link, expiration, err := newURL(fh.inode)
-				if err != nil {
-					return 0, syscall.EACCES
-				}
-				fh.inode.Link = link
-				fh.inode.Attributes.ExpirationDate = expiration
-			} else if !exp.IsZero() && time.Until(exp) < sd {
-				// so the expiration date isn't zero and it's about to expire
-				if flags.Verbose {
-					fmt.Printf("seems like we have a url that expires: %s\n", exp)
-				}
-				if time.Until(exp) < sd {
-					if flags.Verbose {
-						fmt.Println("url is expired")
-					}
-					// Time to hot swap urls!
-					link, expiration, err := newURL(fh.inode)
-					if err != nil {
-						// fh.inode.logFuse("< readFromStream error", 0, err)
-						return 0, syscall.EACCES
-					}
-					fh.inode.Link = link
-					fh.inode.Attributes.ExpirationDate = expiration
-				}
-			}
-			resp, err := awsutil.GetObjectRange(fh.inode.Link, byteRange)
-			if err != nil {
-				return 0, err
-			}
-
-			fh.reader = resp.Body
-		} else {
-			// This is an error.log file, need to read from its error contents.
-			fh.reader = ioutil.NopCloser(bytes.NewBufferString(fh.inode.ErrContents))
+		fh.reader, err = populateReader(fh, byteRange)
+		if err != nil {
+			return 0, err
 		}
 	}
 
@@ -321,6 +275,59 @@ func (fh *FileHandle) readFromStream(offset int64, buf []byte) (bytesRead int, e
 	}
 
 	return
+}
+
+func populateReader(fh *FileHandle, byteRange string) (io.ReadCloser, error) {
+	if fh.inode.ErrContents != "" {
+		// This is an error.log file, need to read from its error contents.
+		return ioutil.NopCloser(bytes.NewBufferString(fh.inode.ErrContents)), nil
+	}
+	sd, _ := time.ParseDuration("30s")
+	exp := fh.inode.Attributes.ExpirationDate
+	if fh.inode.ReqPays {
+		client := awsutil.NewClient(fh.inode.Bucket, fh.inode.Key, fh.inode.Region, fh.inode.fs.opt.CloudProfile)
+		body, err := client.GetObjectRange(byteRange)
+		if err != nil {
+			return nil, syscall.EACCES
+		}
+		return body, nil
+	}
+	if fh.inode.Link == "" {
+		// we need to get a link no matter what
+		if flags.Verbose {
+			fmt.Printf("seems like we don't have a url for: %s\n", *fh.inode.Name)
+		}
+		link, expiration, err := newURL(fh.inode)
+		if err != nil {
+			return nil, syscall.EACCES
+		}
+		fh.inode.Link = link
+		fh.inode.Attributes.ExpirationDate = expiration
+	} else if !exp.IsZero() && time.Until(exp) < sd {
+		// so the expiration date isn't zero and it's about to expire
+		if flags.Verbose {
+			fmt.Printf("seems like we have a url that expires: %s\n", exp)
+		}
+		if time.Until(exp) < sd {
+			if flags.Verbose {
+				fmt.Println("url is expired")
+			}
+			// Time to hot swap urls!
+			link, expiration, err := newURL(fh.inode)
+			if err != nil {
+				// fh.inode.logFuse("< readFromStream error", 0, err)
+				return nil, syscall.EACCES
+			}
+			fh.inode.Link = link
+			fh.inode.Attributes.ExpirationDate = expiration
+		}
+	}
+	resp, err := awsutil.GetObjectRange(fh.inode.Link, byteRange)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Body, nil
 }
 
 // TODO: If on GCP, we now need to get a new instance token everytime we want a new url
