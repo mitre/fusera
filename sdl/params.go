@@ -92,7 +92,6 @@ func (p *Param) addLocalityType(writer *multipart.Writer) error {
 
 func (p *Param) addNgc(writer *multipart.Writer) error {
 	if p.Ngc != nil {
-		// handle ngc bytes
 		part, err := writer.CreateFormFile("ngc", "ngc")
 		if err != nil {
 			return errors.Wrapf(err, "couldn't create form file for ngc")

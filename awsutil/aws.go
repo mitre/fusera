@@ -33,7 +33,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Makes an http HEAD request using the URL provided.
+// HeadObject Makes an http HEAD request using the URL provided.
 // URL should either point to a public obejct or be
 // a signed URL giving the user GET permissions.
 func HeadObject(url string) (*http.Response, error) {
@@ -48,7 +48,7 @@ func HeadObject(url string) (*http.Response, error) {
 	return resp, nil
 }
 
-// Makes an http GET request using the URL provided.
+// GetObject Makes an http GET request using the URL provided.
 // URL should either point to a public obejct or be
 // a signed URL giving the user GET permissions.
 // url: full url path to the object on AWS
@@ -60,7 +60,7 @@ func GetObject(url string) (*http.Response, error) {
 	return resp, nil
 }
 
-// Makes a ranged http GET request using the URL and byteRange provided.
+// GetObjectRange Makes a ranged http GET request using the URL and byteRange provided.
 // URL should either point to a public obejct or be
 // a signed URL giving the user GET permissions.
 // url: full url path to the object on AWS
@@ -89,6 +89,10 @@ func GetObjectRange(url, byteRange string) (*http.Response, error) {
 	return resp, nil
 }
 
+// Client This strut provides a clean interface to making a requester pays type of
+// request to the AWS API. Instead of having to construct the AWS configuration,
+// client, session, and ObjectInput, one can simply provide the most basic fields
+// and request an ObjectRange.
 type Client struct {
 	Bucket  string
 	Key     string
@@ -96,6 +100,7 @@ type Client struct {
 	Profile string
 }
 
+// NewClient This function should be used to create a Client to avoid missing required fields.
 func NewClient(bucket, key, region, profile string) Client {
 	return Client{
 		Bucket:  bucket,
@@ -105,6 +110,8 @@ func NewClient(bucket, key, region, profile string) Client {
 	}
 }
 
+// GetObjectRange Fetches the range of bytes from the file located at the destination on AWS
+// derived from the Client's Bucket and Key fields.
 func (c Client) GetObjectRange(byteRange string) (io.ReadCloser, error) {
 	cfg := (&aws.Config{
 		Credentials: credentials.NewSharedCredentials("", c.Profile),
@@ -122,7 +129,7 @@ func (c Client) GetObjectRange(byteRange string) (io.ReadCloser, error) {
 	return obj.Body, err
 }
 
-// Expects the url to point to a valid ngc file.
+// ReadFile Expects the url to point to a valid ngc file.
 // Uses the aws-sdk to read the file, assuming that
 // this file will not be publicly accessible and will
 // need to utilize aws credentials on the machine.

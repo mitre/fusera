@@ -72,8 +72,6 @@ func (s *SDL) SignAllInBatch(batch int) ([]*fuseralib.Accession, error) {
 		dot += batch
 	}
 	aa, err := signListed(s.URL, s.Param.Acc[i:], s.Param)
-	// TODO: remove later
-	fmt.Println("aa returned from retrieveListed: ", aa)
 	if err != nil {
 		rootErr = append(rootErr, []byte(fmt.Sprintln(err.Error()))...)
 		rootErr = append(rootErr, []byte("List of accessions that failed in this batch:\n")...)
@@ -84,14 +82,11 @@ func (s *SDL) SignAllInBatch(batch int) ([]*fuseralib.Accession, error) {
 	} else {
 		accessions = append(accessions, aa...)
 	}
-	// TODO: remove later
-	fmt.Println("Accessions returned from RetrieveAllInBatch: ", accessions)
+
 	return accessions, nil
 }
 
 func signListed(url string, aa []string, param *Param) ([]*fuseralib.Accession, error) {
-	// TODO: remove later
-	fmt.Println("Accessions given to retrieveListed: ", aa)
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 	writer, err := param.AddGlobals(writer)
@@ -191,7 +186,7 @@ func makeRequest(url string, body *bytes.Buffer, writer *multipart.Writer) ([]*f
 		fmt.Println(string(resdump))
 	}
 	if resp.StatusCode != http.StatusOK {
-		var apiErr ApiError
+		var apiErr apiError
 		err := json.NewDecoder(resp.Body).Decode(&apiErr)
 		if err != nil {
 			response, _ := ioutil.ReadAll(resp.Body)
@@ -213,8 +208,6 @@ func validate(message VersionWrap) ([]*fuseralib.Accession, error) {
 	if err != nil {
 		return nil, err
 	}
-	//TODO: remove
-	fmt.Println("message result: ", message.Result)
 	dup := map[string]bool{}
 	list := make([]*fuseralib.Accession, 0, len(message.Result))
 	for i, a := range message.Result {

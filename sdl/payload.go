@@ -20,7 +20,8 @@ type VersionWrap struct {
 // 1. Expected Version.
 // 2. Result isn't empty.
 func (v *VersionWrap) Validate() error {
-	// TODO: maybe in the future, but for now Fusera can point to different endpoints (i.e versions) which makes this annoying to try and track.
+	// TODO: Have users set what version they want to use instead of endpoint.
+	// Then SdlVersion can be overwritten and this check can actually be valid.
 	// if info.SdlVersion != v.Version {
 	// 	return errors.Errorf("Expected version: %s, got version: %s", info.SdlVersion, v.Version)
 	// }
@@ -180,12 +181,7 @@ func (l *Location) Validate() error {
 	return nil
 }
 
-// TODO: I have a feeling this function will save a lot of heartburn between the different fields that could represent location.
-func (l *Location) addLocationToFile(file fuseralib.File) fuseralib.File {
-	return fuseralib.File{}
-}
-
-type ApiError struct {
+type apiError struct {
 	Status  int    `json:"status,omitempty"`
 	Message string `json:"message,omitempty"`
 }

@@ -144,11 +144,6 @@ var rootCmd = &cobra.Command{
 
 		info.LoadAccessionMap(accs)
 		var API = sdl.NewSDL()
-		// TODO: clean up later
-		fmt.Println("Accessions:")
-		for i, a := range accs {
-			fmt.Printf("%d:\t%s\n", i, a)
-		}
 		var param = sdl.NewParam(accs, locator, token, sdl.SetAcceptCharges(flags.AwsProfile, flags.GcpProfile), types)
 		API.Param = param
 		API.URL = flags.Endpoint

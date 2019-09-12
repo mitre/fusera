@@ -64,7 +64,7 @@ func init() {
 		panic("INTERNAL ERROR: could not bind filetype flag to filetype environment variable")
 	}
 
-	mountCmd.Flags().StringVarP(&flags.Endpoint, "endpoint", "e", "https://www.ncbi.nlm.nih.gov/Traces/sdl/1/retrieve", flags.EndpointMsg)
+	mountCmd.Flags().StringVarP(&flags.Endpoint, "endpoint", "e", "https://www.ncbi.nlm.nih.gov/Traces/sdl/2/retrieve", flags.EndpointMsg)
 	if err := viper.BindPFlag("endpoint", mountCmd.Flags().Lookup("endpoint")); err != nil {
 		panic("INTERNAL ERROR: could not bind endpoint flag to endpoint environment variable")
 	}
@@ -151,11 +151,6 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 
 	info.LoadAccessionMap(accs)
 	var API = sdl.NewSDL()
-	// TODO: clean up later
-	fmt.Println("Accessions:")
-	for i, a := range accs {
-		fmt.Printf("%d:\t%s\n", i, a)
-	}
 	var param = sdl.NewParam(accs, locator, token, sdl.SetAcceptCharges(flags.AwsProfile, flags.GcpProfile), types)
 	API.Param = param
 	API.URL = flags.Endpoint
@@ -190,10 +185,6 @@ func mount(cmd *cobra.Command, args []string) (err error) {
 
 	if flags.Verbose {
 		fmt.Println("Setting fusera options with:")
-		fmt.Println("Accessions:")
-		for i, a := range accessions {
-			fmt.Printf("%d:\t%s\n", i, a.ID)
-		}
 		fmt.Printf("Cloud is: %s\n", locator.SdlCloudName())
 		fmt.Printf("Region is: %s\n", region)
 		fmt.Printf("AWS profile for credentials if needed: %s\n", flags.AwsProfile)

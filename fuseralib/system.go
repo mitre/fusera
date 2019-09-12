@@ -268,6 +268,18 @@ type Fusera struct {
 	forgotCnt    uint32
 }
 
+func TryUnmount(mountPoint string) (err error) {
+	for i := 0; i < 20; i++ {
+		err = fuse.Unmount(mountPoint)
+		if err != nil {
+			time.Sleep(time.Second)
+		} else {
+			break
+		}
+	}
+	return
+}
+
 func (fs *Fusera) allocateInodeID() (id fuseops.InodeID) {
 	id = fs.nextInodeID
 	fs.nextInodeID++

@@ -239,10 +239,6 @@ func retrieveGCPInstanceToken() ([]byte, error) {
 	return token, nil
 }
 
-//-----BEGIN PKCS7-----
-
-//-----END PKCS7-----
-
 func retrieveAWSInstanceToken() ([]byte, error) {
 	// make a request to token endpoint
 	client := &http.Client{
@@ -261,7 +257,6 @@ func retrieveAWSInstanceToken() ([]byte, error) {
 		},
 	}
 	resp, err := client.Get("http://169.254.169.254/latest/dynamic/instance-identity/pkcs7")
-	//resp, err := client.Get("http://169.254.169.254/latest/dynamic/instance-identity/document")
 	if err != nil {
 		return nil, errors.Wrapf(err, "fusera attempted to retrieve an instance token but encountered an error, this feature only works when fusera is on an amazon or google instance")
 	}
@@ -286,65 +281,3 @@ func retrieveAWSInstanceToken() ([]byte, error) {
 	encodedDoc := base64.StdEncoding.EncodeToString([]byte(document))
 	return []byte(fmt.Sprintf("%s%s%s.%s", beginPKCS7, encodedToken, endPKCS7, encodedDoc)), nil
 }
-
-// ResolveTraditionalLocation Forms the traditional location string.
-// func ResolveTraditionalLocation() (string, error) {
-// 	platform, err := ResolveRegion()
-// 	if err != nil {
-// 		return "", err
-// 	}
-// 	return platform.Name + "." + platform.Region, nil
-// }
-
-// FindLocation Attempts to find the location fusera is running, be it GCP or AWS.
-// If location cannot be resolved, return error.
-// FindLocation attempts to figure out which cloud
-// provider Fusera is running on and what region of that cloud.
-// func FindLocation() (*Platform, error) {
-// 	p := &Platform{}
-// 	aws, err := resolveAwsRegion()
-// 	if err != nil {
-// 		// could be on google
-// 		// retain aws error message
-// 		msg := err.Error()
-// 		token, err := retrieveGCPInstanceToken()
-// 		if err != nil {
-// 			// return both aws and google error messages
-// 			return nil, errors.Wrap(err, msg)
-// 		}
-// 		zone, err := resolveGcpZone()
-// 		if err != nil {
-// 			// return both aws and google error messages
-// 			return nil, errors.Wrap(err, msg)
-// 		}
-// 		p.Name = "gs"
-// 		p.Region = zone
-// 		p.InstanceToken = token
-// 		return p, nil
-// 	}
-// 	p.Name = "s3"
-// 	p.Region = aws
-// 	return p, nil
-// }
-
-// ResolveRegion Attempt to resolve the location on aws or gs.
-// func ResolveRegion() (*Platform, error) {
-// 	platform := &Platform{}
-// 	region, err := resolveAwsRegion()
-// 	if err != nil {
-// 		// could be on google
-// 		// retain aws error message
-// 		msg := err.Error()
-// 		region, err = resolveGcpZone()
-// 		if err != nil {
-// 			// return both aws and google error messages
-// 			return nil, errors.Wrap(err, msg)
-// 		}
-// 		platform.Name = "gs"
-// 		platform.Region = region
-// 		return platform, nil
-// 	}
-// 	platform.Name = "s3"
-// 	platform.Region = region
-// 	return platform, nil
-// }
