@@ -261,6 +261,7 @@ func retrieveAWSInstanceToken() ([]byte, error) {
 		},
 	}
 	resp, err := client.Get("http://169.254.169.254/latest/dynamic/instance-identity/pkcs7")
+	//resp, err := client.Get("http://169.254.169.254/latest/dynamic/instance-identity/document")
 	if err != nil {
 		return nil, errors.Wrapf(err, "fusera attempted to retrieve an instance token but encountered an error, this feature only works when fusera is on an amazon or google instance")
 	}
@@ -279,10 +280,11 @@ func retrieveAWSInstanceToken() ([]byte, error) {
 	if err != nil {
 		return nil, errors.New("issue trying to retrieve the identity document for an instance token, couldn't decode response from aws")
 	}
-	beginPKCS7 := base64.StdEncoding.EncodeToString([]byte("-----BEGIN PKCS7-----"))
-	endPKCS7 := base64.StdEncoding.EncodeToString([]byte("-----END PKCS7-----"))
+	beginPKCS7 := base64.StdEncoding.EncodeToString([]byte("-----BEGIN PKCS7-----\n"))
+	encodedToken := base64.StdEncoding.EncodeToString([]byte(string(token) + "\n"))
+	endPKCS7 := base64.StdEncoding.EncodeToString([]byte("-----END PKCS7-----\n"))
 	encodedDoc := base64.StdEncoding.EncodeToString([]byte(document))
-	return []byte(fmt.Sprintf("%s\n%s\n%s\n.%s", beginPKCS7, endPKCS7, token, encodedDoc)), nil
+	return []byte(fmt.Sprintf("%s%s%s.%s", beginPKCS7, encodedToken, endPKCS7, encodedDoc)), nil
 }
 
 // ResolveTraditionalLocation Forms the traditional location string.
