@@ -17,7 +17,7 @@ import (
 type Locator interface {
 	SdlCloudName() string
 	Region() (string, error)
-	Locality() string
+	Locality() (string, error)
 	LocalityType() string
 }
 
@@ -39,12 +39,12 @@ func (g *GcpLocation) Region() (string, error) {
 }
 
 // Locality Returns the locality for GCP environment.
-func (g *GcpLocation) Locality() string {
+func (g *GcpLocation) Locality() (string, error) {
 	token, err := retrieveGCPInstanceToken()
 	if err != nil {
-		return ""
+		return "", err
 	}
-	return string(token)
+	return string(token), nil
 }
 
 // LocalityType Returns the locality-type for GCP environment.
@@ -70,12 +70,12 @@ func (a *AwsLocation) Region() (string, error) {
 }
 
 // Locality Returns the locality for AWS environment. //TODO: Implement
-func (a *AwsLocation) Locality() string {
+func (a *AwsLocation) Locality() (string, error) {
 	token, err := retrieveAWSInstanceToken()
 	if err != nil {
-		return ""
+		return "", err
 	}
-	return string(token)
+	return string(token), nil
 }
 
 // LocalityType Returns the locality-type for AWS environment.
@@ -99,8 +99,8 @@ func (m *ManualLocation) Region() (string, error) {
 }
 
 // Locality Returns the locality for a manual environment.
-func (m *ManualLocation) Locality() string {
-	return m.locality
+func (m *ManualLocation) Locality() (string, error) {
+	return m.locality, nil
 }
 
 // LocalityType Returns the locality-type "forced" for a manual environment.

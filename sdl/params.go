@@ -73,7 +73,11 @@ func (p *Param) AddGlobals(writer *multipart.Writer) (*multipart.Writer, error) 
 }
 
 func (p *Param) addLocality(writer *multipart.Writer) error {
-	if err := writer.WriteField("locality", p.Location.Locality()); err != nil {
+	locality, err := p.Location.Locality()
+	if err != nil {
+		return err
+	}
+	if err := writer.WriteField("locality", locality); err != nil {
 		return errors.New("could not write locality field to multipart.Writer")
 	}
 	return nil

@@ -134,6 +134,15 @@ func (s *SDL) Sign(accession string) (*fuseralib.Accession, error) {
 	return accs[0], nil
 }
 
+// AddIdent Adds an ident parameter to a link to fulfill the demand of a Compute Environment Required file link.
+func (s *SDL) AddIdent(link string) (string, error) {
+	token, err := s.Param.Location.Locality()
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s&ident=%s", link, string(token)), nil
+}
+
 // SignAll Asks the SDL API to return locations (including signed links) for all the accessions, typically called on start up of Fusera when the eager flag has been set.
 func (s *SDL) SignAll() ([]*fuseralib.Accession, error) {
 	body := &bytes.Buffer{}

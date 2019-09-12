@@ -7,6 +7,7 @@ type API interface {
 	Sign(accession string) (*Accession, error)
 	SignAll() ([]*Accession, error)
 	SignAllInBatch(batch int) ([]*Accession, error)
+	AddIdent(link string) (string, error)
 }
 
 // FetchAccessions A convenience function to serve the specific behavior of first calling the SDL API on start up.

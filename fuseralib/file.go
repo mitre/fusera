@@ -282,8 +282,6 @@ func populateReader(fh *FileHandle, byteRange string) (io.ReadCloser, error) {
 		// This is an error.log file, need to read from its error contents.
 		return ioutil.NopCloser(bytes.NewBufferString(fh.inode.ErrContents)), nil
 	}
-	sd, _ := time.ParseDuration("30s")
-	exp := fh.inode.Attributes.ExpirationDate
 	if fh.inode.ReqPays {
 		client := awsutil.NewClient(fh.inode.Bucket, fh.inode.Key, fh.inode.Region, fh.inode.fs.opt.CloudProfile)
 		body, err := client.GetObjectRange(byteRange)
@@ -292,37 +290,32 @@ func populateReader(fh *FileHandle, byteRange string) (io.ReadCloser, error) {
 		}
 		return body, nil
 	}
-	if fh.inode.Link == "" {
-		// we need to get a link no matter what
-		if flags.Verbose {
-			fmt.Printf("seems like we don't have a url for: %s\n", *fh.inode.Name)
-		}
-		link, expiration, err := newURL(fh.inode)
-		if err != nil {
-			return nil, syscall.EACCES
-		}
-		fh.inode.Link = link
-		fh.inode.Attributes.ExpirationDate = expiration
-	} else if !exp.IsZero() && time.Until(exp) < sd {
-		// so the expiration date isn't zero and it's about to expire
-		if flags.Verbose {
-			fmt.Printf("seems like we have a url that expires: %s\n", exp)
-		}
-		if time.Until(exp) < sd {
-			if flags.Verbose {
-				fmt.Println("url is expired")
-			}
-			// Time to hot swap urls!
-			link, expiration, err := newURL(fh.inode)
-			if err != nil {
-				// fh.inode.logFuse("< readFromStream error", 0, err)
-				return nil, syscall.EACCES
-			}
-			fh.inode.Link = link
-			fh.inode.Attributes.ExpirationDate = expiration
-		}
+
+	// So now we need to handle Compute Environment Required,
+	// because that doesn't have an expiration date, but requires us to add
+	// an ident parameter to the link in order for it to work.
+	link, err := addIdentIfRequired(fh)
+	if err != nil {
+		return nil, syscall.EACCES
 	}
-	resp, err := awsutil.GetObjectRange(fh.inode.Link, byteRange)
+
+	// Then, technically, we don't need this code below until we implement the code to snatch the link
+	// from the redirection along with its expiration date. Yuck.
+	// When I do start this, I'll need to keep the CeRequired link in a field so that I don't lose it.
+	// Then I'll need logic to check whether we have an unexpired link we can keep using or whether we need to
+	// use the CeRequired link to refresh the contemporary link.
+
+	// sd, _ := time.ParseDuration("30s")
+	// exp := fh.inode.Attributes.ExpirationDate
+	// if (fh.inode.Link == "") || (!exp.IsZero() && time.Until(exp) < sd) { // We need a new link
+	// 	link, expiration, err := newURL(fh.inode)
+	// 	if err != nil {
+	// 		return nil, syscall.EACCES
+	// 	}
+	// 	fh.inode.Link = link
+	// 	fh.inode.Attributes.ExpirationDate = expiration
+	// }
+	resp, err := awsutil.GetObjectRange(link, byteRange)
 	if err != nil {
 		return nil, err
 	}
@@ -330,7 +323,13 @@ func populateReader(fh *FileHandle, byteRange string) (io.ReadCloser, error) {
 	return resp.Body, nil
 }
 
-// TODO: If on GCP, we now need to get a new instance token everytime we want a new url
+func addIdentIfRequired(fh *FileHandle) (string, error) {
+	if fh.inode.CeRequired {
+		return fh.inode.fs.signer.AddIdent(fh.inode.Link)
+	}
+	return fh.inode.Link, nil
+}
+
 func newURL(inode *Inode) (string, time.Time, error) {
 	accession, err := inode.fs.signer.Sign(inode.Acc)
 	if err != nil {
