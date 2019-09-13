@@ -16,6 +16,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/mattrbianchi/twig"
@@ -48,10 +49,11 @@ func init() {
 
 	viper.SetEnvPrefix(flags.EnvPrefix)
 	viper.AutomaticEnv()
+	flags.BinaryName = "fusera"
 }
 
 var rootCmd = &cobra.Command{
-	Use:     "fusera",
+	Use:     flags.BinaryName,
 	Short:   "A FUSE interface to the NCBI Sequence Read Archive (SRA) - " + flags.Version,
 	Long:    ``,
 	Version: flags.Version,
@@ -60,6 +62,10 @@ var rootCmd = &cobra.Command{
 // Execute runs the main command of fusera, which has no action of its own,
 // so it evaluates which subcommand should be executed.
 func Execute() {
+	if os.Geteuid() == 0 {
+		fmt.Println("Running Fusera as root is not supported. This causes problems with mounting the filesystem using FUSE.")
+		os.Exit(1)
+	}
 	if err := rootCmd.Execute(); err != nil {
 		prettyPrintError(err)
 		os.Exit(1)

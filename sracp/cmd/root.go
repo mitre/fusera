@@ -93,10 +93,12 @@ func init() {
 
 	viper.SetEnvPrefix("dbgap")
 	viper.AutomaticEnv()
+
+	flags.BinaryName = "sracp"
 }
 
 var rootCmd = &cobra.Command{
-	Use:     "sracp",
+	Use:     flags.BinaryName,
 	Short:   "A tool similar to cp that allows a user to download accessions - " + flags.Version,
 	Long:    ``,
 	Version: flags.Version,
@@ -148,6 +150,12 @@ var rootCmd = &cobra.Command{
 			}
 		}
 		path := args[0]
+		// Test whether we can write to this location. If not, fail here.
+		err = os.MkdirAll(filepath.Join(path, ".test"), 0755)
+		if err != nil {
+			fmt.Printf("It seems like sracp cannot make directories under %s. Please check that you have correct permissions to write to that path.\n", path)
+			os.Exit(1)
+		}
 		batch := flags.ResolveBatch(platform.Name, awsBatch, gcpBatch)
 
 		var accessions []*fuseralib.Accession
@@ -298,6 +306,10 @@ var rootCmd = &cobra.Command{
 
 // Execute runs the root command of sracp, which copies files from the cloud to a local file system.
 func Execute() {
+	if os.Geteuid() == 0 {
+		fmt.Println("Running sracp as root is not supported. The tool should not require root.")
+		os.Exit(1)
+	}
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
