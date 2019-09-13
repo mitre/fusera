@@ -17,9 +17,6 @@
 package main
 
 import (
-	"os"
-	"strings"
-
 	"github.com/mattrbianchi/twig"
 	"github.com/mitre/fusera/sracp/cmd"
 )
@@ -29,18 +26,5 @@ func init() {
 }
 
 func main() {
-	EnsurePathIsSet()
 	cmd.Execute()
-}
-
-// mount -a seems to run goofys without PATH
-// usually fusermount is in /bin
-func EnsurePathIsSet() {
-	for _, e := range os.Environ() {
-		if strings.HasPrefix(e, "PATH=") {
-			return
-		}
-	}
-
-	os.Setenv("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
 }

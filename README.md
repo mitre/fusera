@@ -1,6 +1,7 @@
 ![mitrelogo-black](static/mitrelogo-black.jpg)
 
-# Software Tools
+Software Tools
+===
 
 *fusera*
 ---
@@ -9,24 +10,28 @@
 
 *fusera* presents all of the cloud-hosted SRA data for a set of SRA Accession numbers as a mounted directory, with one subdirectory per SRA Accession number. The user’s credentials are passed through a [dbGaP repository key](https://www.ncbi.nlm.nih.gov/books/NBK63512/), or ngc file, that is obtained from dbGaP.  *fusera* automatically detects the cloud region where it is deployed on both AWS and GCP, and requests access to data from the SRA's Data Locator web-servvices API within that same region with the aim of limiting charges for data egress. *fusera* is intended for deployment on AWS or GCP.
 
-## *sracp*
+*sracp*
+---
 
 Users may want to copy data from its cloud bucket into the local storage of their cloud-hosted virtual machine, instead of operating on the data in-place using *fusera*.  *sracp* addresses this need.   Given a list of SRA accession numbers, a dbGaP repository key, and a target directory, *sracp* copies the data from its cloud bucket into a specified target directory on a cloud-based virtual machine.  The user’s credentials are passed through a [dbGaP repository key](https://www.ncbi.nlm.nih.gov/books/NBK63512/), or ngc file, that is obtained from dbGaP.  *sracp* automatically detects the cloud region where it is deployed on both AWS and GCP, and requests access to data from the SRA's Data Locator web-servvices API within that same region with the aim of limiting charges for data egress. *sracp* is intended for deployment on AWS or GCP.
 
-# Installation
+Installation
+===
 
 See installation instructions on the [wiki](https://github.com/mitre/fusera/wiki/Installing-Fusera).
 
-# Dependencies
+Dependencies
+===
 
-## *fusera*
+*fusera*
+---
 
 Depending on the linux distro, `fuse-utils` may need to be installed.
 
 Mac users must install `osxfuse` either on their [website](https://osxfuse.github.io) or through [Homebrew](http://brew.sh/):
 
 ```ShellSession
-$ brew cask install osxfuse
+brew cask install osxfuse
 ```
 
 Usage
@@ -59,24 +64,24 @@ Modifications Copyright (C) 2018  The MITRE Corporation
 Licensed under the Apache License, Version 2.0
 
 Only the functionality needed was retained from the Goofys project. These files were removed from the original source:
+
 - api/api.go
 - internal/
-	- perms.go
-	- ticket.go
-	- ticket_test.go
-	- v2signer.go
-	- minio_test.go
-	- goofys_test.go
-	- aws_test.go
+  - perms.go
+  - ticket.go
+  - ticket_test.go
+  - v2signer.go
+  - minio_test.go
+  - goofys_test.go
+  - aws_test.go
 
 There has also been some refactoring of the codebase, so while some files have been removed, the code in them might exist in other files. License headers and copyright have been kept in these circumstances.
 
-The major changes to the original source stem from *fusera*'s use case.  Goofys was designed to present the content of a single bucket as a file system.  *fusera* is designed to present the data associated with a collection of SRA accessions as a file system, and the data can be spread across many buckets.  Goofys' use of the aws-sdk to interact with AWS compatible endpoints was replaced since *fusera* has no need to authenticate for write access to any of these files.
+The major changes to the original source stem from *fusera*'s use case.  Goofys was designed to present the content of a single bucket as a file system.  *fusera* is designed to present the data associated with a collection of SRA accessions as a file system, and the data can be spread across many buckets.
 
-Goofys' start up was modified to determine the content of the presented file system based on querying the NCBI Data Locator API, rather than querying the content of the target bucket. 
+Goofys' start up was modified to determine the content of the presented file system based on querying the NCBI Data Locator API, rather than querying the content of the target bucket.
 
 References
 ===
 
 *fusera* owes much to the [Goofys](https://github.com/kahing/goofys) project: a high-performance, POSIX-ish file system written in Go which was used as a starting point.
-

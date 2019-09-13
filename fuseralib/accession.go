@@ -22,7 +22,7 @@ func (a *Accession) HasError() bool {
 
 type File struct {
 	Name           string    `json:"name,omitempty"`
-	Size           string    `json:"size,omitempty"`
+	Size           uint64    `json:"size,omitempty"`
 	Type           string    `json:"type,omitempty"`
 	ModifiedDate   time.Time `json:"modificationDate,omitempty"`
 	Md5Hash        string    `json:"md5,omitempty"`
@@ -32,4 +32,6 @@ type File struct {
 	Key            string    `json:"key,omitempty"`
 	Service        string    `json:"service,omitempty"`
 	Region         string    `json:"region,omitempty"`
+	PayRequired    bool      `json:"payRequired,omitempty"`
+	CeRequired     bool      `json:"ceRequired,omitempty"`
 }

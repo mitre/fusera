@@ -21,11 +21,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"syscall"
 	"time"
 
-	"github.com/mitre/fusera/awsutil"
+	"github.com/mitre/fusera/gps"
+	"github.com/mitre/fusera/info"
+
 	"github.com/mitre/fusera/fuseralib"
 	"github.com/mitre/fusera/sdl"
 
@@ -39,15 +40,6 @@ import (
 
 var (
 	debug bool
-
-	location  string
-	accession string
-	tokenpath string
-	filetype  string
-
-	endpoint             string
-	awsBatch, awsDefault int = 0, 50
-	gcpBatch, gcpDefault int = 0, 25
 )
 
 func init() {
@@ -56,56 +48,52 @@ func init() {
 		panic("INTERNAL ERROR: could not bind debug flag to debug environment variable")
 	}
 
-	rootCmd.Flags().StringVarP(&location, "location", "l", "", flags.LocationMsg)
+	rootCmd.Flags().StringVarP(&flags.Location, "location", "l", "", flags.LocationMsg)
 	if err := viper.BindPFlag("location", rootCmd.Flags().Lookup("location")); err != nil {
 		panic("INTERNAL ERROR: could not bind location flag to location environment variable")
 	}
 
-	rootCmd.Flags().StringVarP(&accession, "accession", "a", "", flags.AccessionMsg)
+	rootCmd.Flags().StringVarP(&flags.Accession, "accession", "a", "", flags.AccessionMsg)
 	if err := viper.BindPFlag("accession", rootCmd.Flags().Lookup("accession")); err != nil {
 		panic("INTERNAL ERROR: could not bind accession flag to accession environment variable")
 	}
 
-	rootCmd.Flags().StringVarP(&tokenpath, "token", "t", "", flags.TokenMsg)
+	rootCmd.Flags().StringVarP(&flags.Tokenpath, "token", "t", "", flags.TokenMsg)
 	if err := viper.BindPFlag("token", rootCmd.Flags().Lookup("token")); err != nil {
 		panic("INTERNAL ERROR: could not bind token flag to token environment variable")
 	}
 
-	rootCmd.Flags().StringVarP(&filetype, "filetype", "f", "", flags.FiletypeMsg)
+	rootCmd.Flags().StringVarP(&flags.Filetype, "filetype", "f", "", flags.FiletypeMsg)
 	if err := viper.BindPFlag("filetype", rootCmd.Flags().Lookup("filetype")); err != nil {
 		panic("INTERNAL ERROR: could not bind filetype flag to filetype environment variable")
 	}
 
-	rootCmd.Flags().StringVarP(&endpoint, "endpoint", "e", "https://www.ncbi.nlm.nih.gov/Traces/sdl/1/retrieve", flags.EndpointMsg)
+	rootCmd.Flags().StringVarP(&flags.Endpoint, "endpoint", "e", "https://www.ncbi.nlm.nih.gov/Traces/sdl/1/retrieve", flags.EndpointMsg)
 	if err := viper.BindPFlag("endpoint", rootCmd.Flags().Lookup("endpoint")); err != nil {
 		panic("INTERNAL ERROR: could not bind endpoint flag to endpoint environment variable")
 	}
 
-	rootCmd.Flags().IntVarP(&awsBatch, "aws-batch", "", awsDefault, flags.AwsBatchMsg)
-	if err := viper.BindPFlag("aws-batch", rootCmd.Flags().Lookup("aws-batch")); err != nil {
-		panic("INTERNAL ERROR: could not bind aw-batch flag to aw-batch environment variable")
-	}
-
-	rootCmd.Flags().IntVarP(&gcpBatch, "gcp-batch", "", gcpDefault, flags.GcpBatchMsg)
-	if err := viper.BindPFlag("gcp-batch", rootCmd.Flags().Lookup("gcp-batch")); err != nil {
-		panic("INTERNAL ERROR: could not bind gcp-batch flag to gcp-batch environment variable")
+	rootCmd.Flags().IntVarP(&flags.Batch, "batch", "", flags.BatchDefault, flags.BatchMsg)
+	if err := viper.BindPFlag("batch", rootCmd.Flags().Lookup("batch")); err != nil {
+		panic("INTERNAL ERROR: could not bind batch flag to batch environment variable")
 	}
 
 	viper.SetEnvPrefix("dbgap")
 	viper.AutomaticEnv()
 
-	flags.BinaryName = "sracp"
+	info.BinaryName = "sracp"
 }
 
 var rootCmd = &cobra.Command{
-	Use:     flags.BinaryName,
-	Short:   "A tool similar to cp that allows a user to download accessions - " + flags.Version,
+	Use:     info.BinaryName,
+	Short:   "A tool similar to cp that allows a user to download accessions - " + info.Version,
 	Long:    ``,
-	Version: flags.Version,
+	Version: info.Version,
 	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) (err error) {
 		setConfig()
-		foldEnvVarsIntoFlagValues()
+		flags.FoldEnvVarsIntoFlagValues()
+		tokenpath := flags.FoldNgcIntoToken(flags.Tokenpath, flags.NgcPath)
 		var token []byte
 		if tokenpath != "" {
 			token, err = flags.ResolveNgcFile(tokenpath)
@@ -113,42 +101,21 @@ var rootCmd = &cobra.Command{
 				return err
 			}
 		}
-		// Now resolveAccession's value
 		var accs []string
-		if accession != "" {
-			accs, err = flags.ResolveAccession(accession)
+		if flags.Accession != "" {
+			accs, err = flags.ResolveAccession(flags.Accession)
 			if err != nil {
 				return err
 			}
 		}
-
-		// Location takes longest if there's a failure, so validate it last.
-		var platform *awsutil.Platform
-		if location == "" {
-			twig.Debug("Location is empty, attempting to resolve location")
-			platform, err = flags.FindLocation()
-			if err != nil {
-				twig.Debug(err)
-				return errors.New("no location: a location was not provided so sracp attempted to resolve the location itself, this feature is only supported when sracp is running on Amazon or Google's cloud platforms")
-			}
-		} else {
-			twig.Debug("Location was manually set")
-			platform, err = awsutil.NewManualPlatform(location)
-			if err != nil {
-				twig.Debug(err)
-				fmt.Println(err)
-				return err
-			}
-		}
-		twig.Debugf("Platform: %v", platform)
-
 		var types map[string]bool
-		if filetype != "" {
-			types, err = flags.ResolveFileType(filetype)
+		if flags.Filetype != "" {
+			types, err = flags.ResolveFileType(flags.Filetype)
 			if err != nil {
-				return errors.Errorf("could not parse contents of filetype flag: %s", filetype)
+				return err
 			}
 		}
+
 		path := args[0]
 		// Test whether we can write to this location. If not, fail here.
 		err = os.MkdirAll(filepath.Join(path, ".test"), 0755)
@@ -156,60 +123,49 @@ var rootCmd = &cobra.Command{
 			fmt.Printf("It seems like sracp cannot make directories under %s. Please check that you have correct permissions to write to that path.\n", path)
 			os.Exit(1)
 		}
-		batch := flags.ResolveBatch(platform.Name, awsBatch, gcpBatch)
 
-		var accessions []*fuseralib.Accession
-		var location string
-		if platform.IsGCP() {
-			location = string(platform.InstanceToken[:])
-		} else {
-			location, err = flags.ResolveLocation()
+		// Location takes longest if there's a failure, so validate it last.
+		var locator gps.Locator
+		if flags.Location != "" {
+			locator, err = gps.NewManualLocation(flags.Location)
+			if err != nil {
+				twig.Debug(err)
+				fmt.Println(err)
+				return err
+			}
+		} else { // figure out which locator we'll need
+			locator, err = gps.GenerateLocator()
 			if err != nil {
 				twig.Debug(err)
 				fmt.Println(err)
 				return errors.New("no location provided")
 			}
 		}
-		client := sdl.NewEagerClient(endpoint, location, token, types)
-		if debug {
-			fmt.Printf("Communicating with SDL API at: %s\n", endpoint)
+
+		info.LoadAccessionMap(accs)
+		var API = sdl.NewSDL()
+		var param = sdl.NewParam(accs, locator, token, sdl.SetAcceptCharges(flags.AwsProfile, flags.GcpProfile), types)
+		API.Param = param
+		API.URL = flags.Endpoint
+		if flags.Verbose {
+			fmt.Printf("Communicating with SDL API at: %s\n", flags.Endpoint)
 			fmt.Printf("Using token at: %s\n", tokenpath)
 			fmt.Printf("Contents of token: %s\n", string(token[:]))
 			fmt.Printf("Limiting file types to: %v\n", types)
-			fmt.Printf("Giving cloud platform as: %s\n", string(platform.Name))
-			fmt.Printf("Giving region as: %s\n", string(platform.Region[:]))
-			fmt.Printf("Requesting accessions in batches of: %d\n", batch)
+			fmt.Printf("Giving locality as: %s\n", locator.LocalityType())
+			fmt.Printf("Requesting accessions in batches of: %d\n", flags.Batch)
 		}
-		if accs == nil || len(accs) == 0 {
-			aa, err := client.Retrieve(nil)
-			if err != nil {
+		accessions, warnings := fuseralib.FetchAccessions(API, accs, flags.Batch)
+		if warnings != nil {
+			if !flags.Silent {
 				fmt.Println(err.Error())
-			} else {
-				accessions = append(accessions, aa...)
 			}
-		} else {
-			dot := batch
-			i := 0
-			for dot < len(accs) {
-				aa, err := client.Retrieve(accs[i:dot])
-				if err != nil {
-					fmt.Println(err.Error())
-					fmt.Println("List of accessions that failed in this batch:")
-					fmt.Println(accs[i:dot])
-				} else {
-					accessions = append(accessions, aa...)
-				}
-				i = dot
-				dot += batch
+		}
+		if len(accessions) == 0 {
+			if !flags.Silent {
+				fmt.Println("It seems like none of the accessions were successful, fusera is shutting down.")
 			}
-			aa, err := client.Retrieve(accs[i:])
-			if err != nil {
-				fmt.Println(err.Error())
-				fmt.Println("List of accessions that failed in this batch:")
-				fmt.Println(accs[i:])
-			} else {
-				accessions = append(accessions, aa...)
-			}
+			os.Exit(1)
 		}
 
 		for _, a := range accessions {
@@ -222,7 +178,7 @@ var rootCmd = &cobra.Command{
 			urls := make([]string, 0, len(accs))
 			var totalFileSize uint64
 			for _, f := range a.Files {
-				// Defensive programming: if the API returns filetypes the user didn't want, still don't copy them.
+				// if the API returns filetypes the user didn't want, still don't copy them.
 				if types != nil {
 					if _, ok := types[f.Type]; !ok {
 						continue
@@ -233,12 +189,7 @@ var rootCmd = &cobra.Command{
 					continue
 				}
 				urls = append(urls, f.Link)
-				fileSize, err := strconv.ParseUint(f.Size, 10, 64)
-				if err != nil {
-					fmt.Printf("%s: %s: failed to parse file size in order to check if there's enough disk space to copy it. File size value was %s", a.ID, f.Name, f.Size)
-					continue
-				}
-				totalFileSize += fileSize
+				totalFileSize += f.Size
 			}
 			// Check available disk space and see if file is larger.
 			// If so, print out error message saying such, refuse to use curl, and move on.
@@ -314,16 +265,6 @@ func Execute() {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-}
-
-func foldEnvVarsIntoFlagValues() {
-	flags.ResolveString("endpoint", &endpoint)
-	flags.ResolveInt("aws-batch", &awsBatch)
-	flags.ResolveInt("gcp-batch", &gcpBatch)
-	flags.ResolveString("location", &location)
-	flags.ResolveString("accession", &accession)
-	flags.ResolveString("token", &tokenpath)
-	flags.ResolveString("filetype", &filetype)
 }
 
 func setConfig() {

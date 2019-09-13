@@ -22,7 +22,6 @@ import (
 	"net/http"
 	"os"
 	"runtime/debug"
-	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -38,11 +37,10 @@ import (
 // Options is a collection of values that describe how Fusera should behave.
 type Options struct {
 	// The file used to authenticate with the SRA Data Locator API
-	API API
-	Acc []*Accession
-	//Region   string
-	Platform *awsutil.Platform
-	Profile  string
+	API          API
+	Acc          []*Accession
+	Region       string
+	CloudProfile string
 
 	// File system
 	MountOptions      map[string]string
@@ -135,20 +133,16 @@ func NewFusera(ctx context.Context, opt *Options) (*Fusera, error) {
 			dir.mu.Lock()
 			file := NewInode(fs, dir, awsutil.String(name), &fullFileName)
 			file.Link = f.Link
-			if f.Bucket != "" {
-				file.ReqPays = true
+			if f.PayRequired {
+				file.ReqPays = f.PayRequired
+				file.Region = opt.Region
 				file.Bucket = f.Bucket
 				file.Key = f.Key
-				file.Platform = opt.Platform
 			}
+			file.CeRequired = f.CeRequired
 			file.Acc = acc.ID
-			u, err := strconv.ParseUint(f.Size, 10, 64)
-			if err != nil {
-				// twig.Debug("%s: %s: failed to set file size to %s, couldn't parse into a uint64", acc.ID, file.Name, f.Size)
-				u = 0
-			}
 			file.Attributes = InodeAttributes{
-				Size:           u,
+				Size:           f.Size,
 				Mtime:          f.ModifiedDate,
 				ExpirationDate: f.ExpirationDate,
 			}
@@ -274,6 +268,18 @@ type Fusera struct {
 	forgotCnt    uint32
 }
 
+func TryUnmount(mountPoint string) (err error) {
+	for i := 0; i < 20; i++ {
+		err = fuse.Unmount(mountPoint)
+		if err != nil {
+			time.Sleep(time.Second)
+		} else {
+			break
+		}
+	}
+	return
+}
+
 func (fs *Fusera) allocateInodeID() (id fuseops.InodeID) {
 	id = fs.nextInodeID
 	fs.nextInodeID++
@@ -305,15 +311,9 @@ func (fs *Fusera) StatFS(ctx context.Context, op *fuseops.StatFSOp) (err error) 
 	var totalSpace uint64
 	for _, a := range fs.accs {
 		for _, f := range a.Files {
-			s, err := strconv.ParseUint(f.Size, 10, 64)
-			if err != nil {
-				totalSpace = 1024 * 1024 * 1024
-				goto skip
-			}
-			totalSpace += s
+			totalSpace += f.Size
 		}
 	}
-skip:
 	const blockSize = 4096
 	totalBlocks := totalSpace / blockSize
 	const INODES = 1 * 1000 * 1000 * 1000 // 1 billion
