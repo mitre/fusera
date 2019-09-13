@@ -12,10 +12,6 @@ import (
 
 var (
 	EnvPrefix = "dbgap"
-	// Version should be set at compile time to `git describe --tags --abbrev=0`
-	Version string
-	// BinaryName should be set on init in order to know what binary is using the flags library.
-	BinaryName string
 
 	LocationName  = "location"
 	AccessionName = "accession"
@@ -23,8 +19,7 @@ var (
 	TokenName     = "token"
 	FiletypeName  = "filetype"
 	EndpointName  = "endpoint"
-	AwsBatchName  = "aws-batch"
-	GcpBatchName  = "gcp-batch"
+	BatchName     = "batch"
 	SilentName    = "silent"
 	VerboseName   = "verbose"
 
@@ -37,47 +32,24 @@ var (
 	Tokenpath string
 	Filetype  string
 
-	Endpoint                      string
-	AwsBatch, AwsDefault          int    = 0, 50
-	GcpBatch, GcpDefault          int    = 0, 25
-	AwsProfile, AwsProfileDefault string = "", "default"
-	GcpProfile, GcpProfileDefault string = "", "gcp"
-	Eager                         bool
+	Endpoint            string
+	Batch, BatchDefault int = 0, 50
+	AwsProfile          string
+	GcpProfile          string
 
-	LocationMsg   = "Cloud provider and region where files should be located.\nFORMAT: [cloud.region]\nEXAMPLES: [s3.us-east-1 | gs.US]\nNOTE: This can be auto-resolved if running on AWS or GCP.\nEnvironment Variable: [$DBGAP_LOCATION]"
+	LocationMsg   = "Fusera can resolve location when executed inside AWS or GCP environments, otherwise a location will need to be provided and errors in location might result in undesired outcomes.\nFORMAT: [cloud.region]\nEXAMPLES: [s3.us-east-1 | gs.US]\nEnvironment Variable: [$DBGAP_LOCATION]"
 	AccessionMsg  = "A list of accessions to mount or path to accession file.\nEXAMPLES: [\"SRR123,SRR456\" | local/accession/file | https://<bucket>.<region>.s3.amazonaws.com/<accession/file>]\nNOTE: If using an s3 url, the proper aws credentials need to be in place on the machine.\nEnvironment Variable: [$DBGAP_ACCESSION]"
 	NgcMsg        = "A path to an ngc file used to authorize access to accessions in dbGaP. If used in tandem with token, the token takes precedence.\nEXAMPLES: [local/ngc/file | https://<bucket>.<region>.s3.amazonaws.com/<ngc/file>]\nNOTE: If using an s3 url, the proper aws credentials need to be in place on the machine.\nEnvironment Variable: [$DBGAP_NGC]"
 	TokenMsg      = "A path to one of the various security tokens used to authorize access to accessions in dbGaP.\nEXAMPLES: [local/token/file | https://<bucket>.<region>.s3.amazonaws.com/<token/file>]\nNOTE: If using an s3 url, the proper aws credentials need to be in place on the machine.\nEnvironment Variable: [$DBGAP_TOKEN]"
 	FiletypeMsg   = "A list of the only file types to copy.\nEXAMPLES: \"cram,crai,bam,bai\"\nEnvironment Variable: [$DBGAP_FILETYPE]"
 	EndpointMsg   = "ADVANCED: Change the endpoint used to communicate with SDL API.\nEnvironment Variable: [$DBGAP_ENDPOINT]"
-	AwsBatchMsg   = "ADVANCED: Adjust the amount of accessions put in one request to the SDL API when using an AWS location.\nEnvironment Variable: [$DBGAP_AWS-BATCH]"
+	BatchMsg      = "ADVANCED: Adjust the amount of accessions put in one request to the SDL API.\nEnvironment Variable: [$DBGAP_BATCH]"
 	GcpBatchMsg   = "ADVANCED: Adjust the amount of accessions put in one request to the SDL API when using a GCP location.\nEnvironment Variable: [$DBGAP_GCP-BATCH]"
 	AwsProfileMsg = "The desired AWS credentials profile in ~/.aws/credentials to use for instances when files require the requester (you) to pay for accessing the file.\nEnvironment Variable: [$DBGAP_AWS-PROFILE]\nNOTE: This account will be charged all cost accrued by accessing these certain files."
 	GcpProfileMsg = "The desired GCP credentials profile in ~/.aws/credentials to use for instances when files require the requester (you) to pay for accessing the file.\nEnvironment Variable: [$DBGAP_GCP-PROFILE]\nNOTE: This account will be charged all cost accrued by accessing these certain files. These credentials should be in the AWS supported format that Google provides in order to work with their AWS compatible API."
 	SilentMsg     = "Prints nothing, most useful when running in scripts."
 	VerboseMsg    = "Prints everything, most useful for troubleshooting."
 )
-
-// ResolveLocation attempts to resolve the location on GCP and AWS.
-// If location cannot be resolved, return error.
-func ResolveLocation() (string, error) {
-	loc, err := awsutil.ResolveTraditionalLocation()
-	if err != nil {
-		return "", err
-	}
-	return loc, nil
-}
-
-// FindLocation attempts to resolve the location on GCP and AWS.
-// If location cannot be resolved, return error.
-func FindLocation() (*awsutil.Platform, error) {
-	p, err := awsutil.FindLocation()
-	if err != nil {
-		return nil, err
-	}
-	// We still need region information to make requests
-	return p, nil
-}
 
 // ResolveAccession If a list of comma separated accessions was provided, use it.
 // Otherwise, if a path to a cart file was given, deduce whether it's on s3 or local.
@@ -174,6 +146,15 @@ func HavePermissions(path string) bool {
 	return !os.IsPermission(err)
 }
 
+func SetProfile(cloud string) string {
+	if IsAWS(cloud) {
+		return AwsProfile
+	} else if IsGCP(cloud) {
+		return GcpProfile
+	}
+	return ""
+}
+
 func IsAWS(location string) bool {
 	return strings.HasPrefix(location, "s3")
 }
@@ -190,6 +171,25 @@ func ResolveBatch(location string, aws, gcp int) int {
 		return gcp
 	}
 	return 10
+}
+
+func FoldNgcIntoToken(token, ngc string) string {
+	if ngc != "" && token == "" {
+		return ngc
+	}
+	return token
+}
+
+func FoldEnvVarsIntoFlagValues() {
+	ResolveString("endpoint", &Endpoint)
+	ResolveInt("batch", &Batch)
+	ResolveString("aws-profile", &AwsProfile)
+	ResolveString("gcp-profile", &GcpProfile)
+	ResolveString("location", &Location)
+	ResolveString("accession", &Accession)
+	ResolveString("token", &Tokenpath)
+	ResolveString("ngc", &NgcPath)
+	ResolveString("filetype", &Filetype)
 }
 
 func ResolveString(name string, value *string) {

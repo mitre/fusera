@@ -51,7 +51,8 @@ type Inode struct {
 	ReqPays     bool
 	Bucket      string
 	Key         string
-	Platform    *awsutil.Platform
+	Region      string
+	CeRequired  bool
 
 	mu sync.Mutex // everything below is protected by mu
 
